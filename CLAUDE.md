@@ -14,12 +14,13 @@ Personal AI-powered data analysis tool. User upload CSV/Excel → AI generate dy
 mydatalens/
 ├── frontend/
 │   └── app/
-│       ├── dashboard/page.tsx      # Main page: tabs (Overview, Dashboard, Batch, Merge)
+│       ├── dashboard/page.tsx      # Main page: tabs (Overview, Dashboard, Batch, Merge, Transform)
 │       ├── batch/page.tsx          # Redirects to /dashboard
 │       ├── api-setup/page.tsx      # API key setup
 │       └── components/
 │           ├── BatchPanel.tsx      # Batch processing panel (embedded in Dashboard Batch tab)
-│           └── MergePanel.tsx      # Merge panel (embedded in Dashboard Merge tab)
+│           ├── MergePanel.tsx      # Merge panel (embedded in Dashboard Merge tab)
+│           └── TransformPanel.tsx  # Transform panel (embedded in Dashboard Transform tab)
 ├── backend/         # FastAPI app
 ├── docs/            # PRD and documentation
 ├── CLAUDE.md        # This file
@@ -50,7 +51,7 @@ mydatalens/
 - [x] Chatbot markdown rendering (react-markdown)
 - [x] BatchPanel inline in Dashboard tab (refactored from separate page)
 
-### Sprint 2 (In Progress):
+### Sprint 2 (Done):
 - [x] Batch multi-column input (multi-select chips UI)
 - [x] Batch identity column + dual download (raw/merged)
 - [x] Batch preview output (3 sample rows before submit)
@@ -64,7 +65,8 @@ mydatalens/
 
 ### Sprint 3 (In Progress):
 - [x] Tab Merge — join 2 datasets + download CSV (MergePanel.tsx + /merge endpoint)
-- [ ] Tab Transform — column config + split by N rows + download chunks
+- [x] Tab Merge — preview step: first 5 rows + before/after row & column counts (/merge/preview)
+- [x] Tab Transform — column select + rename + split by N rows + ZIP download (TransformPanel.tsx + /transform/preview + /transform/split)
 - [ ] Model selection per provider
 
 ### Sprint 4 (Planned):
