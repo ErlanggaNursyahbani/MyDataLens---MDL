@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import BatchPanel from '../components/BatchPanel'
 import MergePanel from '../components/MergePanel'
+import TransformPanel from '../components/TransformPanel'
 import {
   Bar,
   BarChart,
@@ -64,7 +65,7 @@ type ChatMessage = {
 
 type ChatState = 'idle' | 'loading' | 'error'
 
-type ActiveTab = 'overview' | 'dashboard' | 'batch' | 'merge'
+type ActiveTab = 'overview' | 'dashboard' | 'batch' | 'merge' | 'transform'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -81,10 +82,11 @@ const TOOLTIP_STYLE = {
 }
 
 const TABS: { id: ActiveTab; label: string }[] = [
-  { id: 'overview',  label: 'Overview' },
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'batch',     label: 'Batch' },
-  { id: 'merge',     label: 'Merge' },
+  { id: 'overview',   label: 'Overview' },
+  { id: 'dashboard',  label: 'Dashboard' },
+  { id: 'batch',      label: 'Batch' },
+  { id: 'merge',      label: 'Merge' },
+  { id: 'transform',  label: 'Transform' },
 ]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -828,6 +830,13 @@ export default function DashboardPage() {
             {activeTab === 'merge' && (
               <div className="mt-6">
                 <MergePanel initialUploadResult={result} />
+              </div>
+            )}
+
+            {/* ── Transform tab ─────────────────────────────────────────────── */}
+            {activeTab === 'transform' && (
+              <div className="mt-6">
+                <TransformPanel initialUploadResult={result} />
               </div>
             )}
 
