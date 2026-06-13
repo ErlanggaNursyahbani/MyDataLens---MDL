@@ -906,13 +906,37 @@ export default function DashboardPage() {
                   {msg.role === 'assistant' ? (
                     <ReactMarkdown
                       components={{
-                        p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
-                        ul: ({ children }) => <ul className="list-disc list-inside space-y-0.5 my-1">{children}</ul>,
-                        ol: ({ children }) => <ol className="list-decimal list-inside space-y-0.5 my-1">{children}</ol>,
-                        li: ({ children }) => <li>{children}</li>,
-                        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
-                        code: ({ children }) => <code className="font-mono text-xs bg-zinc-700 px-1 py-0.5 rounded">{children}</code>,
-                        pre: ({ children }) => <pre className="font-mono text-xs bg-zinc-700 p-2 rounded my-1 overflow-x-auto">{children}</pre>,
+                        p: ({ children }) => <p className="mb-1.5 last:mb-0 leading-relaxed">{children}</p>,
+                        h1: ({ children }) => <h1 className="text-base font-bold text-zinc-100 mt-2 mb-1">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-sm font-bold text-zinc-100 mt-2 mb-1">{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-sm font-semibold text-zinc-200 mt-1.5 mb-0.5">{children}</h3>,
+                        ul: ({ children }) => <ul className="list-disc list-outside pl-4 space-y-0.5 my-1.5">{children}</ul>,
+                        ol: ({ children }) => <ol className="list-decimal list-outside pl-4 space-y-0.5 my-1.5">{children}</ol>,
+                        li: ({ children }) => <li className="leading-relaxed">{children}</li>,
+                        strong: ({ children }) => <strong className="font-semibold text-zinc-100">{children}</strong>,
+                        em: ({ children }) => <em className="italic text-zinc-300">{children}</em>,
+                        blockquote: ({ children }) => (
+                          <blockquote className="border-l-2 border-indigo-500 pl-3 my-1.5 text-zinc-400 italic">{children}</blockquote>
+                        ),
+                        code: ({ className, children }) => {
+                          const isBlock = Boolean(className)
+                          return isBlock
+                            ? <code className={`block font-mono text-xs text-zinc-200 ${className ?? ''}`}>{children}</code>
+                            : <code className="font-mono text-xs bg-zinc-700 text-indigo-300 px-1 py-0.5 rounded">{children}</code>
+                        },
+                        pre: ({ children }) => (
+                          <pre className="font-mono text-xs bg-zinc-950 border border-zinc-700 p-3 rounded-lg my-2 overflow-x-auto">{children}</pre>
+                        ),
+                        table: ({ children }) => (
+                          <div className="overflow-x-auto my-2 rounded-lg border border-zinc-700">
+                            <table className="w-full text-xs">{children}</table>
+                          </div>
+                        ),
+                        thead: ({ children }) => <thead className="bg-zinc-800">{children}</thead>,
+                        tbody: ({ children }) => <tbody>{children}</tbody>,
+                        tr: ({ children }) => <tr className="border-t border-zinc-700">{children}</tr>,
+                        th: ({ children }) => <th className="px-3 py-2 text-left font-medium text-zinc-200 whitespace-nowrap">{children}</th>,
+                        td: ({ children }) => <td className="px-3 py-2 text-zinc-300">{children}</td>,
                       }}
                     >
                       {msg.content}
