@@ -32,10 +32,10 @@ mydatalens/
 
 ## Master Feature List
 
-### Sprint 1 (Current):
-- [ ] Tab Navigation (Overview, Dashboard, Batch, Merge)
-- [ ] Chatbot floating button + slide panel
-- [ ] KPI cards consistency fix (full dataset)
+### Sprint 1 (Done):
+- [x] Tab Navigation (Overview, Dashboard, Batch, Merge)
+- [x] Chatbot floating button + slide panel
+- [x] KPI cards consistency fix (full dataset)
 
 ### Sprint 2:
 - [ ] Batch multi-column input (multi-select)
