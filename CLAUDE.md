@@ -57,9 +57,9 @@ mydatalens/
 - [x] B2 — Multi-select input columns (chips UI)
 - [x] E1 — Custom output column name (default: ai_output)
 - [x] E2 — Multiple output columns (always-expanded cards, one batch job, N output columns in CSV)
-- [ ] E3 — Role/persona optional field (next)
-- [ ] E4 — Top 10 tables in Dashboard
-- [ ] E5 — Chatbot markdown polish
+- [x] E3 — Role/persona optional field (collapsible, prepended to system prompt)
+- [x] E4 — Top 10 tables in Dashboard (Pandas only, up to 3 tables, ranked list + bar)
+- [x] E5 — Chatbot markdown polish (headers, em, blockquote, tables, inline/block code)
 
 ### Sprint 3 (Planned):
 - [ ] Tab Merge — join 2 datasets + download CSV
