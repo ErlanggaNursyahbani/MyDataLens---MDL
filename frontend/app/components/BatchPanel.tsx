@@ -25,6 +25,12 @@ type BatchInfo = {
   failedCount: number
 }
 
+type PreviewRow = {
+  identity: string
+  input: string
+  ai_output: string
+}
+
 type Phase = 'setup' | 'tracking'
 
 type BatchPanelProps = {
@@ -96,11 +102,17 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
   const [fileName, setFileName] = useState(initialFileName)
 
   // Configure state
+  const [identityColumn, setIdentityColumn] = useState('')
   const [selectedColumn, setSelectedColumn] = useState('')
   const [task, setTask] = useState('')
+
+  // Preview state
+  const [isPreviewing, setIsPreviewing] = useState(false)
+  const [previewRows, setPreviewRows] = useState<PreviewRow[] | null>(null)
+  const [previewError, setPreviewError] = useState('')
   const [showConfirm, setShowConfirm] = useState(false)
 
-  // Submit / extract state
+  // Submit state
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
 
@@ -110,7 +122,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [statusError, setStatusError] = useState('')
   const [showCompletion, setShowCompletion] = useState(false)
-  const [isDownloading, setIsDownloading] = useState(false)
+  const [downloadMode, setDownloadMode] = useState<'raw' | 'merged' | null>(null)
 
   const prevStatusRef = useRef<BatchStatus | null>(null)
   const batchIdRef = useRef<string | null>(null)
@@ -222,9 +234,12 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
     setIsUploading(true)
     setUploadError('')
     setUploadResult(null)
+    setIdentityColumn('')
     setSelectedColumn('')
     setTask('')
     setShowConfirm(false)
+    setPreviewRows(null)
+    setPreviewError('')
     setSubmitError('')
     setFileName(f.name)
 
@@ -259,6 +274,53 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
     if (f) void uploadFile(f)
   }
 
+  async function handlePreview() {
+    if (!selectedColumn || !task.trim() || !uploadResult) return
+
+    setIsPreviewing(true)
+    setPreviewError('')
+    setPreviewRows(null)
+
+    const source = uploadResult.all_rows ?? uploadResult.sample
+    const sampleRows = source.slice(0, 3)
+
+    const inputValues = sampleRows.map(row => {
+      const v = row[selectedColumn]
+      return v !== null && v !== undefined ? String(v) : ''
+    })
+    const identityValues = sampleRows.map(row => {
+      if (!identityColumn) return ''
+      const v = row[identityColumn]
+      return v !== null && v !== undefined ? String(v) : ''
+    })
+
+    try {
+      const res = await fetch('http://localhost:8000/batch/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          column: selectedColumn,
+          task: task.trim(),
+          rows: inputValues,
+          identity_values: identityValues,
+          provider,
+          api_key: apiKey,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json() as { detail?: string }
+        throw new Error(err.detail ?? `HTTP ${res.status}`)
+      }
+      const data = await res.json() as { preview: PreviewRow[] }
+      setPreviewRows(data.preview)
+      setShowConfirm(true)
+    } catch (e) {
+      setPreviewError(e instanceof Error ? e.message : 'Preview failed')
+    } finally {
+      setIsPreviewing(false)
+    }
+  }
+
   async function handleSubmit() {
     if (!selectedColumn || !task.trim()) return
     if (!uploadResult?.all_rows?.length && !file) return
@@ -268,17 +330,21 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
 
     try {
       let values: string[]
+      let identityValues: string[]
 
       if (uploadResult?.all_rows?.length) {
-        // Extract client-side from all_rows (available when loaded from sessionStorage/prop)
         values = uploadResult.all_rows
           .map(row => {
             const v = row[selectedColumn]
             return v !== null && v !== undefined ? String(v) : ''
           })
           .filter(v => v.length > 0)
+        identityValues = uploadResult.all_rows.map(row => {
+          if (!identityColumn) return ''
+          const v = row[identityColumn]
+          return v !== null && v !== undefined ? String(v) : ''
+        })
       } else if (file) {
-        // Extract via backend endpoint (fresh file upload without all_rows)
         const formData = new FormData()
         formData.append('file', file)
         formData.append('column', selectedColumn)
@@ -293,6 +359,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
         }
         const { values: extracted } = await extractRes.json() as { values: string[]; count: number }
         values = extracted
+        identityValues = []
       } else {
         throw new Error('No data source available for batch processing')
       }
@@ -306,6 +373,9 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
           rows: values,
           provider,
           api_key: apiKey,
+          identity_column: identityColumn || null,
+          identity_values: identityValues,
+          all_rows: uploadResult?.all_rows ?? null,
         }),
       })
       if (!submitRes.ok) {
@@ -357,11 +427,11 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
     }
   }
 
-  async function handleDownload() {
-    if (!batchInfo || isDownloading) return
-    setIsDownloading(true)
+  async function handleDownload(mode: 'raw' | 'merged') {
+    if (!batchInfo || downloadMode !== null) return
+    setDownloadMode(mode)
     try {
-      const params = new URLSearchParams({ provider, api_key: apiKey })
+      const params = new URLSearchParams({ provider, api_key: apiKey, mode })
       const res = await fetch(
         `http://localhost:8000/batch/download/${batchInfo.batchId}?${params}`
       )
@@ -373,7 +443,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `batch_results_${batchInfo.batchId.slice(0, 8)}.csv`
+      a.download = `batch_${mode}_${batchInfo.batchId.slice(0, 8)}.csv`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -381,26 +451,30 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
     } catch (e) {
       setStatusError(e instanceof Error ? e.message : 'Download failed')
     } finally {
-      setIsDownloading(false)
+      setDownloadMode(null)
     }
   }
 
   function resetAll() {
     setFile(null)
+    setIdentityColumn('')
     setSelectedColumn('')
     setTask('')
     setUploadError('')
     setSubmitError('')
     setShowConfirm(false)
+    setPreviewRows(null)
+    setIsPreviewing(false)
+    setPreviewError('')
     setPhase('setup')
     setBatchInfo(null)
     setStatusError('')
     setShowCompletion(false)
+    setDownloadMode(null)
     prevStatusRef.current = null
     localStorage.removeItem('mdl_batch_id')
     localStorage.removeItem('mdl_batch_provider')
     if (fileInputRef.current) fileInputRef.current.value = ''
-    // Re-seed from prop if available so user lands back at configure, not upload zone
     setUploadResult(initialUploadResult)
     setFileName(initialUploadResult ? initialFileName : '')
   }
@@ -550,7 +624,37 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
                 </button>
               </div>
 
-              {/* Column selector */}
+              {/* Identity column selector */}
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">
+                  Identity column
+                  <span className="ml-1 text-zinc-500 font-normal">— row identifier shown in preview &amp; download</span>
+                  <span className="ml-1.5 rounded px-1.5 py-0.5 text-[10px] bg-zinc-800 text-zinc-400 font-normal">optional</span>
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {uploadResult.columns.map((col) => (
+                    <button
+                      key={col.name}
+                      onClick={() => {
+                        setIdentityColumn(prev => prev === col.name ? '' : col.name)
+                        setShowConfirm(false)
+                        setPreviewRows(null)
+                      }}
+                      className={[
+                        'flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm transition',
+                        identityColumn === col.name
+                          ? 'border-violet-500 bg-violet-950/60 text-violet-200'
+                          : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-600',
+                      ].join(' ')}
+                    >
+                      {col.name}
+                      <span className={`text-xs font-mono ${dtypeColor(col.dtype)}`}>{col.dtype}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Input column selector */}
               <div>
                 <label className="block text-sm font-medium text-zinc-300 mb-2">
                   Input column
@@ -560,7 +664,11 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
                   {uploadResult.columns.map((col) => (
                     <button
                       key={col.name}
-                      onClick={() => { setSelectedColumn(col.name); setShowConfirm(false) }}
+                      onClick={() => {
+                        setSelectedColumn(col.name)
+                        setShowConfirm(false)
+                        setPreviewRows(null)
+                      }}
                       className={[
                         'flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm transition',
                         selectedColumn === col.name
@@ -583,49 +691,102 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
                 </label>
                 <textarea
                   value={task}
-                  onChange={(e) => { setTask(e.target.value); setShowConfirm(false) }}
+                  onChange={(e) => {
+                    setTask(e.target.value)
+                    setShowConfirm(false)
+                    setPreviewRows(null)
+                  }}
                   rows={3}
                   placeholder={'Example: "Classify this text as: complaint / inquiry / compliment"\nExample: "Extract the product name mentioned in this review"\nExample: "Translate this to English"'}
                   className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                 />
               </div>
 
-              {/* Preview / confirm */}
+              {/* Preview error */}
+              {previewError && (
+                <div className="rounded-lg border border-red-800 bg-red-950/30 px-3 py-2 flex items-center justify-between gap-3">
+                  <p className="text-xs text-red-300 truncate">{previewError}</p>
+                  <button
+                    onClick={() => setPreviewError('')}
+                    className="text-xs text-red-400 hover:text-red-200 transition shrink-0"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+
+              {/* Preview & Confirm button / Preview result panel */}
               {!showConfirm ? (
                 <button
-                  onClick={() => setShowConfirm(true)}
-                  disabled={!selectedColumn || !task.trim()}
+                  onClick={() => void handlePreview()}
+                  disabled={!selectedColumn || !task.trim() || isPreviewing}
                   className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-40 px-5 py-2.5 text-sm font-medium text-white transition"
                 >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                  </svg>
-                  Preview & Confirm
+                  {isPreviewing ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Generating preview…
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                      </svg>
+                      Preview & Confirm
+                    </>
+                  )}
                 </button>
               ) : (
-                /* Confirmation panel */
+                /* Preview result panel */
                 <div className="rounded-xl border border-zinc-700 bg-zinc-900 p-5 space-y-4">
-                  <h3 className="text-sm font-semibold text-zinc-200">Review before submitting</h3>
-
-                  <div className="space-y-2 text-sm">
-                    <div className="flex items-start gap-3">
-                      <span className="text-zinc-500 w-24 shrink-0">Provider</span>
-                      <span className="text-zinc-100">{PROVIDER_LABELS[provider] ?? provider}</span>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <span className="text-zinc-500 w-24 shrink-0">Column</span>
-                      <span className="text-zinc-100 font-mono">{selectedColumn}</span>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <span className="text-zinc-500 w-24 shrink-0">Rows</span>
-                      <span className="text-zinc-100">{uploadResult.row_count.toLocaleString()}</span>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <span className="text-zinc-500 w-24 shrink-0">Task</span>
-                      <span className="text-zinc-100 italic">&quot;{task.trim()}&quot;</span>
-                    </div>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-zinc-200">Preview — 3 sample rows</h3>
+                    <span className="text-xs text-zinc-500">{uploadResult.row_count.toLocaleString()} rows total · {PROVIDER_LABELS[provider] ?? provider}</span>
                   </div>
+
+                  {/* Preview table */}
+                  {previewRows && previewRows.length > 0 && (
+                    <div className="overflow-x-auto rounded-lg border border-zinc-800">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-zinc-800 bg-zinc-950">
+                            {identityColumn && (
+                              <th className="px-3 py-2 text-left font-medium text-violet-400 whitespace-nowrap">
+                                {identityColumn}
+                              </th>
+                            )}
+                            <th className="px-3 py-2 text-left font-medium text-indigo-400 whitespace-nowrap">
+                              {selectedColumn}
+                            </th>
+                            <th className="px-3 py-2 text-left font-medium text-emerald-400 whitespace-nowrap">
+                              AI output
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {previewRows.map((row, i) => (
+                            <tr
+                              key={i}
+                              className="border-b border-zinc-800/60 last:border-0 hover:bg-zinc-800/30 transition"
+                            >
+                              {identityColumn && (
+                                <td className="px-3 py-2.5 text-violet-300 font-mono whitespace-nowrap max-w-[140px] truncate">
+                                  {row.identity || '—'}
+                                </td>
+                              )}
+                              <td className="px-3 py-2.5 text-zinc-300 max-w-[220px]">
+                                <span className="line-clamp-2">{row.input}</span>
+                              </td>
+                              <td className="px-3 py-2.5 text-emerald-300 max-w-[260px]">
+                                <span className="line-clamp-3">{row.ai_output}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
 
                   <div className="rounded-lg border border-indigo-900 bg-indigo-950/30 px-3 py-2 text-xs text-indigo-300">
                     Batch jobs use the async queue API — up to 50% cost savings vs real-time calls.
@@ -654,16 +815,20 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
                           </svg>
-                          Submit Batch
+                          Looks good, submit full batch
                         </>
                       )}
                     </button>
                     <button
-                      onClick={() => setShowConfirm(false)}
+                      onClick={() => {
+                        setShowConfirm(false)
+                        setPreviewRows(null)
+                        setSubmitError('')
+                      }}
                       disabled={isSubmitting}
                       className="text-sm text-zinc-400 hover:text-zinc-200 transition"
                     >
-                      Back to edit
+                      Edit task
                     </button>
                   </div>
                 </div>
@@ -749,25 +914,47 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
             {/* Action buttons */}
             <div className="flex flex-wrap items-center gap-3">
               {batchInfo.status === 'completed' && (
-                <button
-                  onClick={() => void handleDownload()}
-                  disabled={isDownloading}
-                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 active:bg-emerald-800 disabled:opacity-40 px-4 py-2 text-sm font-medium text-white transition"
-                >
-                  {isDownloading ? (
-                    <>
-                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Downloading…
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                      </svg>
-                      Download CSV
-                    </>
-                  )}
-                </button>
+                <>
+                  <button
+                    onClick={() => void handleDownload('raw')}
+                    disabled={downloadMode !== null}
+                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 active:bg-emerald-800 disabled:opacity-40 px-4 py-2 text-sm font-medium text-white transition"
+                  >
+                    {downloadMode === 'raw' ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Downloading…
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        Download Raw
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => void handleDownload('merged')}
+                    disabled={downloadMode !== null}
+                    className="inline-flex items-center gap-2 rounded-lg border border-emerald-700 hover:bg-emerald-950/40 active:bg-emerald-950/60 disabled:opacity-40 px-4 py-2 text-sm font-medium text-emerald-300 transition"
+                  >
+                    {downloadMode === 'merged' ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-emerald-300 border-t-transparent rounded-full animate-spin" />
+                        Downloading…
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                        Download Merged
+                      </>
+                    )}
+                  </button>
+                </>
               )}
 
               <button
