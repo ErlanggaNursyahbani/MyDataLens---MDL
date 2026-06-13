@@ -42,10 +42,10 @@ Phase 1 — Foundation:
 cd frontend && npm run dev
 
 # Backend
-cd backend && uvicorn main:app --reload
+cd backend && venv/Scripts/uvicorn app.main:app --reload
 
 # Install backend deps
-cd backend && pip install -r requirements.txt
+cd backend && venv/Scripts/pip install -r requirements.txt
 
 ## Do NOT
 - Jangan gunakan `any` di TypeScript
