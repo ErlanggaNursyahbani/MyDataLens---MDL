@@ -18,7 +18,8 @@ mydatalens/
 │       ├── batch/page.tsx          # Redirects to /dashboard
 │       ├── api-setup/page.tsx      # API key setup
 │       └── components/
-│           └── BatchPanel.tsx      # Batch processing panel (embedded in Dashboard Batch tab)
+│           ├── BatchPanel.tsx      # Batch processing panel (embedded in Dashboard Batch tab)
+│           └── MergePanel.tsx      # Merge panel (embedded in Dashboard Merge tab)
 ├── backend/         # FastAPI app
 ├── docs/            # PRD and documentation
 ├── CLAUDE.md        # This file
@@ -61,8 +62,8 @@ mydatalens/
 - [x] E4 — Top 10 tables in Dashboard (Pandas only, up to 3 tables, ranked list + bar)
 - [x] E5 — Chatbot markdown polish (headers, em, blockquote, tables, inline/block code)
 
-### Sprint 3 (Planned):
-- [ ] Tab Merge — join 2 datasets + download CSV
+### Sprint 3 (In Progress):
+- [x] Tab Merge — join 2 datasets + download CSV (MergePanel.tsx + /merge endpoint)
 - [ ] Tab Transform — column config + split by N rows + download chunks
 - [ ] Model selection per provider
 
