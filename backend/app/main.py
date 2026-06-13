@@ -1,7 +1,15 @@
+import os
+import sys
+
+# Add vendored LLM packages when they are not in the venv (e.g. root-owned venv)
+_vendor = os.path.join(os.path.dirname(__file__), "..", "..", "vendor")
+if os.path.isdir(_vendor) and _vendor not in sys.path:
+    sys.path.insert(0, os.path.abspath(_vendor))
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import upload
+from app.routers import analyze, upload
 
 app = FastAPI(title="MyDataLens API", version="0.1.0")
 
@@ -14,6 +22,7 @@ app.add_middleware(
 )
 
 app.include_router(upload.router)
+app.include_router(analyze.router)
 
 
 @app.get("/health")

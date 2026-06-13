@@ -1,0 +1,26 @@
+from typing import Any
+
+from .anthropic_provider import generate_dashboard_anthropic
+from .gemini_provider import generate_dashboard_gemini
+from .groq_provider import generate_dashboard_groq
+from .openai_provider import generate_dashboard_openai
+
+
+async def generate_dashboard(
+    provider: str,
+    api_key: str,
+    schema: list[dict[str, str]],
+    sample: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Route dashboard generation to the appropriate LLM provider."""
+    match provider:
+        case "openai":
+            return await generate_dashboard_openai(api_key, schema, sample)
+        case "anthropic":
+            return await generate_dashboard_anthropic(api_key, schema, sample)
+        case "gemini":
+            return await generate_dashboard_gemini(api_key, schema, sample)
+        case "groq":
+            return await generate_dashboard_groq(api_key, schema, sample)
+        case _:
+            raise ValueError(f"Unknown provider: {provider!r}")
