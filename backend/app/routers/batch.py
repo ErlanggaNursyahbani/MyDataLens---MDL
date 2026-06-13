@@ -53,6 +53,7 @@ class BatchSubmitRequest(BaseModel):
     identity_column: str | None = None
     identity_values: list[str] | None = None
     all_rows: list[dict[str, Any]] | None = None
+    output_column_name: str = "ai_output"
 
 
 class BatchSubmitResponse(BaseModel):
@@ -83,27 +84,27 @@ def _user_content(task: str, column: str, row: str) -> str:
     return f"Task: {task}\n\nInput ({column}): {row}"
 
 
-def _make_csv_raw(label: str, label_values: list[str], results: dict[int, str]) -> str:
-    """CSV with a single label column (identity or input) + ai_result."""
+def _make_csv_raw(label: str, label_values: list[str], results: dict[int, str], result_col: str = "ai_output") -> str:
+    """CSV with a single label column (identity or input) + AI result column."""
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow([label, "ai_result"])
+    writer.writerow([label, result_col])
     for i, val in enumerate(label_values):
         writer.writerow([val, results.get(i, "")])
     return buf.getvalue()
 
 
-def _make_csv_merged(all_rows: list[dict[str, Any]], results: dict[int, str]) -> str:
-    """CSV with all original columns + ai_result appended."""
+def _make_csv_merged(all_rows: list[dict[str, Any]], results: dict[int, str], result_col: str = "ai_output") -> str:
+    """CSV with all original columns + AI result column appended."""
     if not all_rows:
         return ""
     buf = io.StringIO()
-    fieldnames = list(all_rows[0].keys()) + ["ai_result"]
+    fieldnames = list(all_rows[0].keys()) + [result_col]
     writer = csv.DictWriter(buf, fieldnames=fieldnames)
     writer.writeheader()
     for i, row in enumerate(all_rows):
         safe_row = {k: ("" if v is None else v) for k, v in row.items()}
-        writer.writerow({**safe_row, "ai_result": results.get(i, "")})
+        writer.writerow({**safe_row, result_col: results.get(i, "")})
     return buf.getvalue()
 
 
@@ -448,6 +449,7 @@ async def submit_batch(request: BatchSubmitRequest) -> BatchSubmitResponse:
         "identity_column": request.identity_column,
         "identity_values": request.identity_values or [],
         "all_rows": request.all_rows or [],
+        "output_column_name": request.output_column_name,
     }
     return BatchSubmitResponse(
         batch_id=batch_id, provider=request.provider, status="submitted"
@@ -529,8 +531,10 @@ async def download_batch_results(
             status_code=502, detail=f"Download failed: {exc}"
         ) from exc
 
+    result_col: str = stored.get("output_column_name", "ai_output")
+
     if mode == "merged" and stored.get("all_rows"):
-        csv_text = _make_csv_merged(stored["all_rows"], results)
+        csv_text = _make_csv_merged(stored["all_rows"], results, result_col)
         suffix = "merged"
     else:
         if stored.get("identity_column") and stored.get("identity_values"):
@@ -539,7 +543,7 @@ async def download_batch_results(
         else:
             label = stored["column"]
             label_values = stored["rows"]
-        csv_text = _make_csv_raw(label, label_values, results)
+        csv_text = _make_csv_raw(label, label_values, results, result_col)
         suffix = "raw"
 
     filename = f"batch_{suffix}_{batch_id[:8]}.csv"

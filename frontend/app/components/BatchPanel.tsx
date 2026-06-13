@@ -105,6 +105,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
   const [identityColumn, setIdentityColumn] = useState('')
   const [selectedColumns, setSelectedColumns] = useState<string[]>([])
   const [task, setTask] = useState('')
+  const [outputColumnName, setOutputColumnName] = useState('ai_output')
 
   // Preview state
   const [isPreviewing, setIsPreviewing] = useState(false)
@@ -237,6 +238,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
     setIdentityColumn('')
     setSelectedColumns([])
     setTask('')
+    setOutputColumnName('ai_output')
     setShowConfirm(false)
     setPreviewRows(null)
     setPreviewError('')
@@ -399,6 +401,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
           identity_column: identityColumn || null,
           identity_values: identityValues,
           all_rows: uploadResult?.all_rows ?? null,
+          output_column_name: outputColumnName,
         }),
       })
       if (!submitRes.ok) {
@@ -483,6 +486,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
     setIdentityColumn('')
     setSelectedColumns([])
     setTask('')
+    setOutputColumnName('ai_output')
     setUploadError('')
     setSubmitError('')
     setShowConfirm(false)
@@ -742,22 +746,37 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
               </div>
 
               {/* Task input */}
-              <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-2">
-                  Task description
-                  <span className="ml-1 text-zinc-500 font-normal">— what should AI do with each row?</span>
-                </label>
-                <textarea
-                  value={task}
-                  onChange={(e) => {
-                    setTask(e.target.value)
-                    setShowConfirm(false)
-                    setPreviewRows(null)
-                  }}
-                  rows={3}
-                  placeholder={'Example: "Classify this text as: complaint / inquiry / compliment"\nExample: "Extract the product name mentioned in this review"\nExample: "Translate this to English"'}
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                />
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-300 mb-2">
+                    Task description
+                    <span className="ml-1 text-zinc-500 font-normal">— what should AI do with each row?</span>
+                  </label>
+                  <textarea
+                    value={task}
+                    onChange={(e) => {
+                      setTask(e.target.value)
+                      setShowConfirm(false)
+                      setPreviewRows(null)
+                    }}
+                    rows={3}
+                    placeholder={'Example: "Classify this text as: complaint / inquiry / compliment"\nExample: "Extract the product name mentioned in this review"\nExample: "Translate this to English"'}
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+                    Output column name
+                    <span className="ml-1 text-zinc-600 font-normal">— header in the downloaded CSV</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={outputColumnName}
+                    onChange={(e) => setOutputColumnName(e.target.value || 'ai_output')}
+                    placeholder="ai_output"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
               </div>
 
               {/* Preview error */}
@@ -818,7 +837,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
                               {selectedColumns.join(', ')}
                             </th>
                             <th className="px-3 py-2 text-left font-medium text-emerald-400 whitespace-nowrap">
-                              AI output
+                              {outputColumnName}
                             </th>
                           </tr>
                         </thead>
