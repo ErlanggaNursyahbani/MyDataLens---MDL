@@ -10,7 +10,13 @@ type ColumnInfo = { name: string; dtype: string }
 type UploadResult = {
   columns: ColumnInfo[]
   sample: Record<string, string | number | boolean | null>[]
+  all_rows?: Record<string, string | number | boolean | null>[]
   row_count: number
+}
+
+type SavedUpload = {
+  result: UploadResult
+  filename: string
 }
 
 type BatchStatus = 'submitted' | 'queued' | 'processing' | 'completed' | 'failed'
@@ -81,6 +87,10 @@ export default function BatchPage() {
   const [apiKey, setApiKey] = useState('')
   const [isBatchSupported, setIsBatchSupported] = useState(true)
 
+  // Saved upload from dashboard session
+  const [savedUpload, setSavedUpload] = useState<SavedUpload | null>(null)
+  const [showDataSourceChoice, setShowDataSourceChoice] = useState(false)
+
   // File / schema state
   const [file, setFile] = useState<File | null>(null)
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
@@ -127,6 +137,18 @@ export default function BatchPage() {
     setApiKey(key)
     setProvider(prov)
     setIsBatchSupported(SUPPORTED_BATCH_PROVIDERS.includes(prov))
+
+    const savedResultRaw = sessionStorage.getItem('mdl_upload_result')
+    const savedFilename = sessionStorage.getItem('mdl_upload_filename')
+    if (savedResultRaw) {
+      try {
+        const parsed = JSON.parse(savedResultRaw) as UploadResult
+        setSavedUpload({ result: parsed, filename: savedFilename ?? 'dataset' })
+        setShowDataSourceChoice(true)
+      } catch {
+        // Stale/corrupt entry — ignore
+      }
+    }
 
     const savedId = localStorage.getItem('mdl_batch_id')
     if (!savedId) return
@@ -385,6 +407,7 @@ export default function BatchPage() {
     localStorage.removeItem('mdl_batch_id')
     localStorage.removeItem('mdl_batch_provider')
     if (fileInputRef.current) fileInputRef.current.value = ''
+    if (savedUpload) setShowDataSourceChoice(true)
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -484,8 +507,46 @@ export default function BatchPage() {
         {phase === 'setup' && (
           <div className={`space-y-6 ${!isBatchSupported ? 'pointer-events-none opacity-40' : ''}`}>
 
+            {/* Data source choice (when dashboard session data exists) */}
+            {showDataSourceChoice && savedUpload && (
+              <div className="rounded-xl border border-zinc-700 bg-zinc-900 p-5 space-y-4">
+                <div>
+                  <p className="text-sm font-medium text-zinc-200">Use existing dataset?</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    A dataset from your current session is available.
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    onClick={() => {
+                      setUploadResult(savedUpload.result)
+                      setFileName(savedUpload.filename)
+                      setShowDataSourceChoice(false)
+                    }}
+                    className="flex-1 flex items-center gap-3 rounded-lg border border-indigo-700 bg-indigo-950/40 hover:bg-indigo-950/70 px-4 py-3 text-left transition"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-indigo-400 shrink-0">
+                      <path fillRule="evenodd" d="M15.621 4.379a3 3 0 0 0-4.242 0l-7 7a3 3 0 0 0 4.241 4.243h.001l.497-.5a.75.75 0 0 1 1.064 1.057l-.498.501-.002.002a4.5 4.5 0 0 1-6.364-6.364l7-7a4.5 4.5 0 0 1 6.368 6.36l-3.455 3.553A2.625 2.625 0 1 1 9.52 9.52l3.45-3.451a.75.75 0 1 1 1.061 1.06l-3.45 3.451a1.125 1.125 0 0 0 1.587 1.595l3.454-3.553a3 3 0 0 0 0-4.243Z" clipRule="evenodd" />
+                    </svg>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-indigo-200 truncate">{savedUpload.filename}</p>
+                      <p className="text-xs text-zinc-500">
+                        {savedUpload.result.row_count.toLocaleString()} rows · {savedUpload.result.columns.length} columns
+                      </p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setShowDataSourceChoice(false)}
+                    className="sm:w-auto px-4 py-3 rounded-lg border border-zinc-700 bg-zinc-800 hover:bg-zinc-700 text-sm text-zinc-300 hover:text-zinc-100 transition"
+                  >
+                    Upload new file
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* File upload */}
-            {!uploadResult ? (
+            {!showDataSourceChoice && !uploadResult ? (
               <>
                 <div
                   onDrop={handleDrop}

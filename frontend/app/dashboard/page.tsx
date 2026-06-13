@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import ReactMarkdown from 'react-markdown'
 import {
   Bar,
   BarChart,
@@ -274,6 +275,20 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!sessionStorage.getItem('mdl_api_key')) {
       router.replace('/api-setup')
+      return
+    }
+    const saved = sessionStorage.getItem('mdl_upload_result')
+    const savedName = sessionStorage.getItem('mdl_upload_filename')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as UploadResult
+        setResult(parsed)
+        setFileName(savedName ?? '')
+        setState('success')
+      } catch {
+        sessionStorage.removeItem('mdl_upload_result')
+        sessionStorage.removeItem('mdl_upload_filename')
+      }
     }
   }, [router])
 
@@ -307,6 +322,8 @@ export default function DashboardPage() {
       const data = await res.json() as UploadResult
       setResult(data)
       setState('success')
+      sessionStorage.setItem('mdl_upload_result', JSON.stringify(data))
+      sessionStorage.setItem('mdl_upload_filename', file.name)
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : 'Upload failed')
       setState('error')
@@ -417,6 +434,8 @@ export default function DashboardPage() {
     setChatError('')
     setActiveTab('overview')
     setIsChatOpen(false)
+    sessionStorage.removeItem('mdl_upload_result')
+    sessionStorage.removeItem('mdl_upload_filename')
     if (inputRef.current) inputRef.current.value = ''
   }
 
@@ -822,7 +841,23 @@ export default function DashboardPage() {
                       : 'bg-zinc-800 text-zinc-100 rounded-bl-sm',
                   ].join(' ')}
                 >
-                  {msg.content}
+                  {msg.role === 'assistant' ? (
+                    <ReactMarkdown
+                      components={{
+                        p: ({ children }) => <p className="mb-1 last:mb-0">{children}</p>,
+                        ul: ({ children }) => <ul className="list-disc list-inside space-y-0.5 my-1">{children}</ul>,
+                        ol: ({ children }) => <ol className="list-decimal list-inside space-y-0.5 my-1">{children}</ol>,
+                        li: ({ children }) => <li>{children}</li>,
+                        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                        code: ({ children }) => <code className="font-mono text-xs bg-zinc-700 px-1 py-0.5 rounded">{children}</code>,
+                        pre: ({ children }) => <pre className="font-mono text-xs bg-zinc-700 p-2 rounded my-1 overflow-x-auto">{children}</pre>,
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  ) : (
+                    msg.content
+                  )}
                 </div>
               </div>
             ))}
