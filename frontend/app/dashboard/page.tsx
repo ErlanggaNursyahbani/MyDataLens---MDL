@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Bar,
@@ -190,6 +190,51 @@ function renderChart(chart: ChartConfig) {
   )
 }
 
+// ── KPI Helpers ────────────────────────────────────────────────────────────────
+
+function computeKPIs(result: UploadResult) {
+  const colNames = result.columns.map(c => c.name)
+  const sample = result.sample
+
+  const revenueCol = colNames.find(c => /revenue|price/i.test(c)) ?? null
+  const productCol = colNames.find(c => /product|name/i.test(c)) ?? null
+  const monthCol = colNames.find(c => /month/i.test(c)) ?? null
+
+  const totalRevenue = revenueCol
+    ? sample.reduce((sum, row) => sum + (Number(row[revenueCol]) || 0), 0)
+    : null
+
+  let topProduct: string | null = null
+  if (productCol) {
+    const sums: Record<string, number> = {}
+    for (const row of sample) {
+      const key = String(row[productCol] ?? '')
+      sums[key] = (sums[key] ?? 0) + (revenueCol ? (Number(row[revenueCol]) || 0) : 1)
+    }
+    const top = Object.entries(sums).sort((a, b) => b[1] - a[1])[0]
+    topProduct = top?.[0] ?? null
+  }
+
+  let topMonth: string | null = null
+  if (monthCol) {
+    const sums: Record<string, number> = {}
+    for (const row of sample) {
+      const key = String(row[monthCol] ?? '')
+      sums[key] = (sums[key] ?? 0) + (revenueCol ? (Number(row[revenueCol]) || 0) : 1)
+    }
+    const top = Object.entries(sums).sort((a, b) => b[1] - a[1])[0]
+    topMonth = top?.[0] ?? null
+  }
+
+  const totalTransactions = result.row_count
+  const avgOrderValue =
+    totalRevenue !== null && totalTransactions > 0
+      ? totalRevenue / totalTransactions
+      : null
+
+  return { totalRevenue, topProduct, topMonth, totalTransactions, avgOrderValue }
+}
+
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -206,6 +251,8 @@ export default function DashboardPage() {
   const [dashboardState, setDashboardState] = useState<DashboardState>('idle')
   const [dashboardResult, setDashboardResult] = useState<DashboardResult | null>(null)
   const [dashboardError, setDashboardError] = useState('')
+
+  const kpis = useMemo(() => (result ? computeKPIs(result) : null), [result])
 
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
@@ -468,6 +515,34 @@ export default function DashboardPage() {
                 Upload new file
               </button>
             </div>
+
+            {/* KPI Cards */}
+            {kpis && (
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                {[
+                  {
+                    label: 'Total Revenue',
+                    value: kpis.totalRevenue !== null
+                      ? kpis.totalRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                      : 'N/A',
+                  },
+                  { label: 'Top Product', value: kpis.topProduct ?? 'N/A' },
+                  { label: 'Top Month', value: kpis.topMonth ?? 'N/A' },
+                  { label: 'Total Transactions', value: kpis.totalTransactions.toLocaleString() },
+                  {
+                    label: 'Avg Order Value',
+                    value: kpis.avgOrderValue !== null
+                      ? kpis.avgOrderValue.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                      : 'N/A',
+                  },
+                ].map(({ label, value }) => (
+                  <div key={label} className="rounded-lg bg-zinc-800 px-4 py-3">
+                    <p className="text-lg font-bold text-white truncate">{value}</p>
+                    <p className="text-xs text-zinc-400 mt-1">{label}</p>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Column schema */}
             <div>

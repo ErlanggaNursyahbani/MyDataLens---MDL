@@ -116,7 +116,7 @@ export default function BatchPage() {
   useEffect(() => { apiKeyRef.current = apiKey }, [apiKey])
   useEffect(() => { batchIdRef.current = batchInfo?.batchId ?? null }, [batchInfo?.batchId])
 
-  // Auth check
+  // Auth check + localStorage restore
   useEffect(() => {
     const key = sessionStorage.getItem('mdl_api_key')
     const prov = sessionStorage.getItem('mdl_provider') ?? 'openai'
@@ -127,6 +127,33 @@ export default function BatchPage() {
     setApiKey(key)
     setProvider(prov)
     setIsBatchSupported(SUPPORTED_BATCH_PROVIDERS.includes(prov))
+
+    const savedId = localStorage.getItem('mdl_batch_id')
+    if (!savedId) return
+    const savedProvider = localStorage.getItem('mdl_batch_provider') ?? prov
+
+    setBatchInfo({
+      batchId: savedId,
+      provider: savedProvider,
+      status: 'processing',
+      completed: 0,
+      total: 0,
+      failedCount: 0,
+    })
+    prevStatusRef.current = 'processing'
+    setPhase('tracking')
+
+    const params = new URLSearchParams({ provider: savedProvider, api_key: key })
+    fetch(`http://localhost:8000/batch/status/${savedId}?${params}`)
+      .then(r => (r.ok ? r.json() : Promise.reject()))
+      .then((data: { status: BatchStatus; total: number; completed: number; failed_count: number }) => {
+        setBatchInfo(prev =>
+          prev
+            ? { ...prev, status: data.status, completed: data.completed, total: data.total, failedCount: data.failed_count }
+            : prev
+        )
+      })
+      .catch(() => {})
   }, [router])
 
   // Completion notification
@@ -284,6 +311,8 @@ export default function BatchPage() {
       setBatchInfo(info)
       prevStatusRef.current = 'submitted'
       setPhase('tracking')
+      localStorage.setItem('mdl_batch_id', batch_id)
+      localStorage.setItem('mdl_batch_provider', provider)
 
       // Immediate status check
       try {
@@ -353,6 +382,8 @@ export default function BatchPage() {
     setStatusError('')
     setShowCompletion(false)
     prevStatusRef.current = null
+    localStorage.removeItem('mdl_batch_id')
+    localStorage.removeItem('mdl_batch_provider')
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
