@@ -32,18 +32,13 @@ mydatalens/
 
 ## Current Phase
 Phase 1 — Foundation: ✅ COMPLETE
-- [x] Next.js project setup
-- [x] FastAPI project setup
-- [x] API Key setup UI
-- [x] File upload & parsing
-
-Phase 2 — Core Features (IN PROGRESS):
+Phase 2 — Core Features: ✅ COMPLETE
 - [x] API Key Setup UI (/api-setup)
-- [x] File Upload & Parsing (backend + frontend)
-- [ ] Dynamic AI Dashboard Generation
-- [ ] Natural Language Chatbot
+- [x] File Upload & Parsing
+- [x] Dynamic AI Dashboard Generation
+- [x] Natural Language Chatbot
 
-Phase 3 — Batch Processing:
+Phase 3 — Batch Processing: ⬜ NEXT
 - [ ] Batch AI Processing
 - [ ] Status Tracker (auto-polling + manual)
 - [ ] Download hasil batch sebagai CSV
