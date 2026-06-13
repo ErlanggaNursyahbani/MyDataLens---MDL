@@ -39,7 +39,7 @@ Phase 1 — Foundation: ✅ COMPLETE
 
 Phase 2 — Core Features (IN PROGRESS):
 - [x] API Key Setup UI (/api-setup)
-- [ ] File Upload & Parsing (backend + frontend)
+- [x] File Upload & Parsing (backend + frontend)
 - [ ] Dynamic AI Dashboard Generation
 - [ ] Natural Language Chatbot
 
