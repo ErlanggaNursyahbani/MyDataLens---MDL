@@ -25,10 +25,15 @@ type BatchInfo = {
   failedCount: number
 }
 
+type TaskItem = {
+  taskDescription: string
+  outputColumnName: string
+}
+
 type PreviewRow = {
   identity: string
   input: string
-  ai_output: string
+  ai_outputs: Record<string, string>
 }
 
 type Phase = 'setup' | 'tracking'
@@ -104,8 +109,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
   // Configure state
   const [identityColumn, setIdentityColumn] = useState('')
   const [selectedColumns, setSelectedColumns] = useState<string[]>([])
-  const [task, setTask] = useState('')
-  const [outputColumnName, setOutputColumnName] = useState('ai_output')
+  const [tasks, setTasks] = useState<TaskItem[]>([{ taskDescription: '', outputColumnName: 'ai_output' }])
 
   // Preview state
   const [isPreviewing, setIsPreviewing] = useState(false)
@@ -237,8 +241,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
     setUploadResult(null)
     setIdentityColumn('')
     setSelectedColumns([])
-    setTask('')
-    setOutputColumnName('ai_output')
+    setTasks([{ taskDescription: '', outputColumnName: 'ai_output' }])
     setShowConfirm(false)
     setPreviewRows(null)
     setPreviewError('')
@@ -277,7 +280,8 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
   }
 
   async function handlePreview() {
-    if (selectedColumns.length === 0 || !task.trim() || !uploadResult) return
+    const validTasks = tasks.filter(t => t.taskDescription.trim())
+    if (selectedColumns.length === 0 || validTasks.length === 0 || !uploadResult) return
 
     setIsPreviewing(true)
     setPreviewError('')
@@ -307,7 +311,10 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           column: selectedColumns.join(', '),
-          task: task.trim(),
+          tasks: validTasks.map(t => ({
+            task_description: t.taskDescription.trim(),
+            output_column_name: t.outputColumnName || 'ai_output',
+          })),
           rows: inputValues,
           identity_values: identityValues,
           provider,
@@ -329,7 +336,8 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
   }
 
   async function handleSubmit() {
-    if (selectedColumns.length === 0 || !task.trim()) return
+    const validTasks = tasks.filter(t => t.taskDescription.trim())
+    if (selectedColumns.length === 0 || validTasks.length === 0) return
     if (!uploadResult?.all_rows?.length && !file) return
 
     setIsSubmitting(true)
@@ -394,14 +402,16 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           column: selectedColumns.join(', '),
-          task: task.trim(),
+          tasks: validTasks.map(t => ({
+            task_description: t.taskDescription.trim(),
+            output_column_name: t.outputColumnName || 'ai_output',
+          })),
           rows: values,
           provider,
           api_key: apiKey,
           identity_column: identityColumn || null,
           identity_values: identityValues,
           all_rows: uploadResult?.all_rows ?? null,
-          output_column_name: outputColumnName,
         }),
       })
       if (!submitRes.ok) {
@@ -485,8 +495,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
     setFile(null)
     setIdentityColumn('')
     setSelectedColumns([])
-    setTask('')
-    setOutputColumnName('ai_output')
+    setTasks([{ taskDescription: '', outputColumnName: 'ai_output' }])
     setUploadError('')
     setSubmitError('')
     setShowConfirm(false)
@@ -745,37 +754,81 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
                 )}
               </div>
 
-              {/* Task input */}
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-300 mb-2">
-                    Task description
-                    <span className="ml-1 text-zinc-500 font-normal">— what should AI do with each row?</span>
+              {/* Task list */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-sm font-medium text-zinc-300">
+                    Tasks
+                    <span className="ml-1 text-zinc-500 font-normal">— one or more AI operations per row</span>
                   </label>
-                  <textarea
-                    value={task}
-                    onChange={(e) => {
-                      setTask(e.target.value)
+                  <button
+                    onClick={() => {
+                      setTasks(prev => [...prev, { taskDescription: '', outputColumnName: `ai_output_${prev.length + 1}` }])
                       setShowConfirm(false)
                       setPreviewRows(null)
                     }}
-                    rows={3}
-                    placeholder={'Example: "Classify this text as: complaint / inquiry / compliment"\nExample: "Extract the product name mentioned in this review"\nExample: "Translate this to English"'}
-                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                  />
+                    className="inline-flex items-center gap-1.5 rounded-md border border-indigo-700 bg-indigo-950/40 px-2.5 py-1 text-xs text-indigo-300 hover:bg-indigo-950/70 transition"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                    Add task
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">
-                    Output column name
-                    <span className="ml-1 text-zinc-600 font-normal">— header in the downloaded CSV</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={outputColumnName}
-                    onChange={(e) => setOutputColumnName(e.target.value || 'ai_output')}
-                    placeholder="ai_output"
-                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
+
+                <div className="space-y-3">
+                  {tasks.map((taskItem, idx) => (
+                    <div
+                      key={idx}
+                      className="rounded-lg border border-zinc-800 bg-zinc-900/60 p-4 space-y-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                          Task {idx + 1}
+                        </span>
+                        {tasks.length > 1 && (
+                          <button
+                            onClick={() => {
+                              setTasks(prev => prev.filter((_, i) => i !== idx))
+                              setShowConfirm(false)
+                              setPreviewRows(null)
+                            }}
+                            className="text-zinc-600 hover:text-red-400 transition"
+                            aria-label="Remove task"
+                          >
+                            <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+
+                      <textarea
+                        value={taskItem.taskDescription}
+                        onChange={(e) => {
+                          setTasks(prev => prev.map((t, i) => i === idx ? { ...t, taskDescription: e.target.value } : t))
+                          setShowConfirm(false)
+                          setPreviewRows(null)
+                        }}
+                        rows={2}
+                        placeholder='E.g. "Classify as: complaint / inquiry / compliment"'
+                        className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                      />
+
+                      <div>
+                        <label className="block text-xs text-zinc-500 mb-1">Output column name</label>
+                        <input
+                          type="text"
+                          value={taskItem.outputColumnName}
+                          onChange={(e) => {
+                            setTasks(prev => prev.map((t, i) => i === idx ? { ...t, outputColumnName: e.target.value } : t))
+                          }}
+                          placeholder="ai_output"
+                          className="w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -796,7 +849,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
               {!showConfirm ? (
                 <button
                   onClick={() => void handlePreview()}
-                  disabled={selectedColumns.length === 0 || !task.trim() || isPreviewing}
+                  disabled={selectedColumns.length === 0 || tasks.every(t => !t.taskDescription.trim()) || isPreviewing}
                   className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-40 px-5 py-2.5 text-sm font-medium text-white transition"
                 >
                   {isPreviewing ? (
@@ -823,47 +876,54 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
                   </div>
 
                   {/* Preview table */}
-                  {previewRows && previewRows.length > 0 && (
-                    <div className="overflow-x-auto rounded-lg border border-zinc-800">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-zinc-800 bg-zinc-950">
-                            {identityColumn && (
-                              <th className="px-3 py-2 text-left font-medium text-violet-400 whitespace-nowrap">
-                                {identityColumn}
-                              </th>
-                            )}
-                            <th className="px-3 py-2 text-left font-medium text-indigo-400 whitespace-nowrap">
-                              {selectedColumns.join(', ')}
-                            </th>
-                            <th className="px-3 py-2 text-left font-medium text-emerald-400 whitespace-nowrap">
-                              {outputColumnName}
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {previewRows.map((row, i) => (
-                            <tr
-                              key={i}
-                              className="border-b border-zinc-800/60 last:border-0 hover:bg-zinc-800/30 transition"
-                            >
+                  {previewRows && previewRows.length > 0 && (() => {
+                    const outputCols = Object.keys(previewRows[0].ai_outputs)
+                    return (
+                      <div className="overflow-x-auto rounded-lg border border-zinc-800">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b border-zinc-800 bg-zinc-950">
                               {identityColumn && (
-                                <td className="px-3 py-2.5 text-violet-300 font-mono whitespace-nowrap max-w-[140px] truncate">
-                                  {row.identity || '—'}
-                                </td>
+                                <th className="px-3 py-2 text-left font-medium text-violet-400 whitespace-nowrap">
+                                  {identityColumn}
+                                </th>
                               )}
-                              <td className="px-3 py-2.5 text-zinc-300 max-w-[220px]">
-                                <span className="line-clamp-2">{row.input}</span>
-                              </td>
-                              <td className="px-3 py-2.5 text-emerald-300 max-w-[260px]">
-                                <span className="line-clamp-3">{row.ai_output}</span>
-                              </td>
+                              <th className="px-3 py-2 text-left font-medium text-indigo-400 whitespace-nowrap">
+                                {selectedColumns.join(', ')}
+                              </th>
+                              {outputCols.map(col => (
+                                <th key={col} className="px-3 py-2 text-left font-medium text-emerald-400 whitespace-nowrap">
+                                  {col}
+                                </th>
+                              ))}
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
+                          </thead>
+                          <tbody>
+                            {previewRows.map((row, i) => (
+                              <tr
+                                key={i}
+                                className="border-b border-zinc-800/60 last:border-0 hover:bg-zinc-800/30 transition"
+                              >
+                                {identityColumn && (
+                                  <td className="px-3 py-2.5 text-violet-300 font-mono whitespace-nowrap max-w-[140px] truncate">
+                                    {row.identity || '—'}
+                                  </td>
+                                )}
+                                <td className="px-3 py-2.5 text-zinc-300 max-w-[220px]">
+                                  <span className="line-clamp-2">{row.input}</span>
+                                </td>
+                                {outputCols.map(col => (
+                                  <td key={col} className="px-3 py-2.5 text-emerald-300 max-w-[260px]">
+                                    <span className="line-clamp-3">{row.ai_outputs[col]}</span>
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )
+                  })()}
 
                   <div className="rounded-lg border border-indigo-900 bg-indigo-950/30 px-3 py-2 text-xs text-indigo-300">
                     Batch jobs use the async queue API — up to 50% cost savings vs real-time calls.

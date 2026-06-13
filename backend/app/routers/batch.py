@@ -25,9 +25,14 @@ _ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
 # ── Pydantic models ─────────────────────────────────────────────────────────────
 
 
+class TaskSpec(BaseModel):
+    task_description: str
+    output_column_name: str
+
+
 class BatchPreviewRequest(BaseModel):
     column: str
-    task: str
+    tasks: list[TaskSpec]
     rows: list[str]
     identity_values: list[str]
     provider: str
@@ -37,7 +42,7 @@ class BatchPreviewRequest(BaseModel):
 class PreviewRow(BaseModel):
     identity: str
     input: str
-    ai_output: str
+    ai_outputs: dict[str, str]  # output_column_name → result
 
 
 class BatchPreviewResponse(BaseModel):
@@ -46,14 +51,13 @@ class BatchPreviewResponse(BaseModel):
 
 class BatchSubmitRequest(BaseModel):
     column: str
-    task: str
+    tasks: list[TaskSpec]
     rows: list[str]
     provider: str
     api_key: str
     identity_column: str | None = None
     identity_values: list[str] | None = None
     all_rows: list[dict[str, Any]] | None = None
-    output_column_name: str = "ai_output"
 
 
 class BatchSubmitResponse(BaseModel):
@@ -84,75 +88,96 @@ def _user_content(task: str, column: str, row: str) -> str:
     return f"Task: {task}\n\nInput ({column}): {row}"
 
 
-def _make_csv_raw(label: str, label_values: list[str], results: dict[int, str], result_col: str = "ai_output") -> str:
-    """CSV with a single label column (identity or input) + AI result column."""
+def _make_csv_raw(
+    label: str,
+    label_values: list[str],
+    results: dict[int, dict[int, str]],
+    task_specs: list[TaskSpec],
+) -> str:
+    """CSV: identity/input column + one output column per task."""
     buf = io.StringIO()
     writer = csv.writer(buf)
-    writer.writerow([label, result_col])
+    writer.writerow([label, *[s.output_column_name for s in task_specs]])
     for i, val in enumerate(label_values):
-        writer.writerow([val, results.get(i, "")])
+        row_r = results.get(i, {})
+        writer.writerow([val, *[row_r.get(t, "") for t in range(len(task_specs))]])
     return buf.getvalue()
 
 
-def _make_csv_merged(all_rows: list[dict[str, Any]], results: dict[int, str], result_col: str = "ai_output") -> str:
-    """CSV with all original columns + AI result column appended."""
+def _make_csv_merged(
+    all_rows: list[dict[str, Any]],
+    results: dict[int, dict[int, str]],
+    task_specs: list[TaskSpec],
+) -> str:
+    """CSV: all original columns + one output column per task appended."""
     if not all_rows:
         return ""
     buf = io.StringIO()
-    fieldnames = list(all_rows[0].keys()) + [result_col]
+    output_cols = [s.output_column_name for s in task_specs]
+    fieldnames = list(all_rows[0].keys()) + output_cols
     writer = csv.DictWriter(buf, fieldnames=fieldnames)
     writer.writeheader()
     for i, row in enumerate(all_rows):
         safe_row = {k: ("" if v is None else v) for k, v in row.items()}
-        writer.writerow({**safe_row, result_col: results.get(i, "")})
+        row_r = results.get(i, {})
+        extras = {s.output_column_name: row_r.get(t, "") for t, s in enumerate(task_specs)}
+        writer.writerow({**safe_row, **extras})
     return buf.getvalue()
 
 
 # ── OpenAI helpers ────────────────────────────────────────────────────────────
 
 
-async def _preview_openai(api_key: str, column: str, task: str, rows: list[str]) -> list[str]:
-    """Run rows through OpenAI chat completions for preview."""
+async def _preview_openai(
+    api_key: str, column: str, tasks: list[TaskSpec], rows: list[str]
+) -> list[list[str]]:
+    """Run sample rows through OpenAI for each task. Returns [task_idx][row_idx]."""
     from openai import AsyncOpenAI
 
     client = AsyncOpenAI(api_key=api_key)
-    results = []
-    for row in rows:
-        resp = await client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": _BATCH_SYSTEM_PROMPT},
-                {"role": "user", "content": _user_content(task, column, row)},
-            ],
-            max_tokens=500,
-        )
-        results.append(resp.choices[0].message.content or "")
-    return results
+    all_results: list[list[str]] = []
+    for task_spec in tasks:
+        task_results: list[str] = []
+        for row in rows:
+            resp = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": _BATCH_SYSTEM_PROMPT},
+                    {"role": "user", "content": _user_content(task_spec.task_description, column, row)},
+                ],
+                max_tokens=500,
+            )
+            task_results.append(resp.choices[0].message.content or "")
+        all_results.append(task_results)
+    return all_results
 
 
-async def _submit_openai(api_key: str, column: str, task: str, rows: list[str]) -> str:
-    """Upload JSONL file and create an OpenAI batch job. Returns the batch ID."""
+async def _submit_openai(
+    api_key: str, column: str, tasks: list[TaskSpec], rows: list[str]
+) -> str:
+    """Upload JSONL with all task×row combinations and create one OpenAI batch job."""
     from openai import AsyncOpenAI
 
     client = AsyncOpenAI(api_key=api_key)
     lines = [
         json.dumps(
             {
-                "custom_id": f"row_{i}",
+                "custom_id": f"row_{r}_task_{t}",
                 "method": "POST",
                 "url": "/v1/chat/completions",
                 "body": {
                     "model": "gpt-4o-mini",
                     "messages": [
                         {"role": "system", "content": _BATCH_SYSTEM_PROMPT},
-                        {"role": "user", "content": _user_content(task, column, row)},
+                        {"role": "user", "content": _user_content(task_spec.task_description, column, row)},
                     ],
                     "max_tokens": 500,
                 },
             },
             ensure_ascii=False,
         )
-        for i, row in enumerate(rows)
+        for r, row in enumerate(rows)
+        for t, task_spec in enumerate(tasks)
     ]
     jsonl_bytes = "\n".join(lines).encode("utf-8")
 
@@ -194,8 +219,10 @@ async def _status_openai(api_key: str, batch_id: str) -> dict[str, Any]:
     }
 
 
-async def _get_results_openai(api_key: str, batch_id: str) -> dict[int, str]:
-    """Download and parse OpenAI batch output; return results dict indexed by row."""
+async def _get_results_openai(
+    api_key: str, batch_id: str
+) -> dict[int, dict[int, str]]:
+    """Download OpenAI batch output; return {row_idx: {task_idx: result}}."""
     from openai import AsyncOpenAI
 
     client = AsyncOpenAI(api_key=api_key)
@@ -209,7 +236,7 @@ async def _get_results_openai(api_key: str, batch_id: str) -> dict[int, str]:
     file_resp = await client.files.content(batch.output_file_id)
     raw = await file_resp.aread()
 
-    results: dict[int, str] = {}
+    results: dict[int, dict[int, str]] = {}
     for line in raw.decode("utf-8").strip().split("\n"):
         line = line.strip()
         if not line:
@@ -217,10 +244,12 @@ async def _get_results_openai(api_key: str, batch_id: str) -> dict[int, str]:
         try:
             obj = json.loads(line)
             cid: str = obj.get("custom_id", "")
-            if cid.startswith("row_"):
-                idx = int(cid[4:])
+            if cid.startswith("row_") and "_task_" in cid:
+                r_part, t_part = cid.split("_task_", 1)
+                r = int(r_part[4:])
+                t = int(t_part)
                 text: str = obj["response"]["body"]["choices"][0]["message"]["content"]
-                results[idx] = text
+                results.setdefault(r, {})[t] = text
         except (KeyError, IndexError, ValueError, json.JSONDecodeError):
             pass
 
@@ -230,50 +259,62 @@ async def _get_results_openai(api_key: str, batch_id: str) -> dict[int, str]:
 # ── Anthropic helpers ─────────────────────────────────────────────────────────
 
 
-def _preview_anthropic_sync(api_key: str, column: str, task: str, rows: list[str]) -> list[str]:
-    """Run rows through Anthropic messages API for preview."""
+def _preview_anthropic_sync(
+    api_key: str, column: str, tasks: list[TaskSpec], rows: list[str]
+) -> list[list[str]]:
+    """Run sample rows through Anthropic for each task. Returns [task_idx][row_idx]."""
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
-    results = []
-    for row in rows:
-        resp = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=500,
-            messages=[{"role": "user", "content": _user_content(task, column, row)}],
-        )
-        results.append(resp.content[0].text if resp.content else "")
-    return results
+    all_results: list[list[str]] = []
+    for task_spec in tasks:
+        task_results: list[str] = []
+        for row in rows:
+            resp = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=500,
+                messages=[{"role": "user", "content": _user_content(task_spec.task_description, column, row)}],
+            )
+            task_results.append(resp.content[0].text if resp.content else "")
+        all_results.append(task_results)
+    return all_results
 
 
-async def _preview_anthropic(api_key: str, column: str, task: str, rows: list[str]) -> list[str]:
-    return await asyncio.to_thread(_preview_anthropic_sync, api_key, column, task, rows)
+async def _preview_anthropic(
+    api_key: str, column: str, tasks: list[TaskSpec], rows: list[str]
+) -> list[list[str]]:
+    return await asyncio.to_thread(_preview_anthropic_sync, api_key, column, tasks, rows)
 
 
-def _submit_anthropic_sync(api_key: str, column: str, task: str, rows: list[str]) -> str:
-    """Create an Anthropic Message Batch. Returns the batch ID."""
+def _submit_anthropic_sync(
+    api_key: str, column: str, tasks: list[TaskSpec], rows: list[str]
+) -> str:
+    """Create one Anthropic Message Batch with all task×row combinations."""
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
     requests = [
         {
-            "custom_id": f"row_{i}",
+            "custom_id": f"row_{r}_task_{t}",
             "params": {
                 "model": "claude-haiku-4-5-20251001",
                 "max_tokens": 500,
                 "messages": [
-                    {"role": "user", "content": _user_content(task, column, row)}
+                    {"role": "user", "content": _user_content(task_spec.task_description, column, row)}
                 ],
             },
         }
-        for i, row in enumerate(rows)
+        for r, row in enumerate(rows)
+        for t, task_spec in enumerate(tasks)
     ]
     batch = client.beta.messages.batches.create(requests=requests)
     return batch.id
 
 
-async def _submit_anthropic(api_key: str, column: str, task: str, rows: list[str]) -> str:
-    return await asyncio.to_thread(_submit_anthropic_sync, api_key, column, task, rows)
+async def _submit_anthropic(
+    api_key: str, column: str, tasks: list[TaskSpec], rows: list[str]
+) -> str:
+    return await asyncio.to_thread(_submit_anthropic_sync, api_key, column, tasks, rows)
 
 
 def _status_anthropic_sync(api_key: str, batch_id: str) -> dict[str, Any]:
@@ -305,8 +346,10 @@ async def _status_anthropic(api_key: str, batch_id: str) -> dict[str, Any]:
     return await asyncio.to_thread(_status_anthropic_sync, api_key, batch_id)
 
 
-def _get_results_anthropic_sync(api_key: str, batch_id: str) -> dict[int, str]:
-    """Stream Anthropic batch results; return results dict indexed by row."""
+def _get_results_anthropic_sync(
+    api_key: str, batch_id: str
+) -> dict[int, dict[int, str]]:
+    """Stream Anthropic batch results; return {row_idx: {task_idx: result}}."""
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
@@ -315,13 +358,15 @@ def _get_results_anthropic_sync(api_key: str, batch_id: str) -> dict[int, str]:
     if batch.processing_status != "ended":
         raise ValueError(f"Batch is still '{batch.processing_status}', not ended yet")
 
-    results: dict[int, str] = {}
+    results: dict[int, dict[int, str]] = {}
     for result in client.beta.messages.batches.results(batch_id):
         cid = result.custom_id
-        if not cid.startswith("row_"):
+        if not (cid.startswith("row_") and "_task_" in cid):
             continue
         try:
-            idx = int(cid[4:])
+            r_part, t_part = cid.split("_task_", 1)
+            r = int(r_part[4:])
+            t = int(t_part)
         except ValueError:
             continue
 
@@ -330,12 +375,14 @@ def _get_results_anthropic_sync(api_key: str, batch_id: str) -> dict[int, str]:
             text = content[0].text if content else ""
         else:
             text = f"[{result.result.type}]"
-        results[idx] = text
+        results.setdefault(r, {})[t] = text
 
     return results
 
 
-async def _get_results_anthropic(api_key: str, batch_id: str) -> dict[int, str]:
+async def _get_results_anthropic(
+    api_key: str, batch_id: str
+) -> dict[int, dict[int, str]]:
     return await asyncio.to_thread(_get_results_anthropic_sync, api_key, batch_id)
 
 
@@ -374,7 +421,7 @@ async def extract_column(
 
 @router.post("/preview", response_model=BatchPreviewResponse)
 async def preview_batch(request: BatchPreviewRequest) -> BatchPreviewResponse:
-    """Run up to 3 sample rows through the regular AI API for a quick preview before batch submit."""
+    """Run up to 3 sample rows through the regular AI API for each task, returning a multi-column preview."""
     if request.provider in ("gemini", "groq"):
         raise HTTPException(
             status_code=400,
@@ -382,6 +429,8 @@ async def preview_batch(request: BatchPreviewRequest) -> BatchPreviewResponse:
         )
     if not request.rows:
         raise HTTPException(status_code=400, detail="No rows provided for preview")
+    if not request.tasks:
+        raise HTTPException(status_code=400, detail="No tasks provided for preview")
 
     n = min(3, len(request.rows))
     sample_rows = request.rows[:n]
@@ -391,9 +440,14 @@ async def preview_batch(request: BatchPreviewRequest) -> BatchPreviewResponse:
 
     try:
         if request.provider == "openai":
-            outputs = await _preview_openai(request.api_key, request.column, request.task, sample_rows)
+            # outputs_by_task[task_idx][row_idx]
+            outputs_by_task = await _preview_openai(
+                request.api_key, request.column, request.tasks, sample_rows
+            )
         elif request.provider == "anthropic":
-            outputs = await _preview_anthropic(request.api_key, request.column, request.task, sample_rows)
+            outputs_by_task = await _preview_anthropic(
+                request.api_key, request.column, request.tasks, sample_rows
+            )
         else:
             raise HTTPException(
                 status_code=400, detail=f"Unknown provider: {request.provider!r}"
@@ -404,7 +458,14 @@ async def preview_batch(request: BatchPreviewRequest) -> BatchPreviewResponse:
         raise HTTPException(status_code=502, detail=f"Preview failed: {exc}") from exc
 
     preview = [
-        PreviewRow(identity=sample_ids[i], input=sample_rows[i], ai_output=outputs[i])
+        PreviewRow(
+            identity=sample_ids[i],
+            input=sample_rows[i],
+            ai_outputs={
+                request.tasks[t].output_column_name: outputs_by_task[t][i]
+                for t in range(len(request.tasks))
+            },
+        )
         for i in range(n)
     ]
     return BatchPreviewResponse(preview=preview)
@@ -412,7 +473,7 @@ async def preview_batch(request: BatchPreviewRequest) -> BatchPreviewResponse:
 
 @router.post("/submit", response_model=BatchSubmitResponse)
 async def submit_batch(request: BatchSubmitRequest) -> BatchSubmitResponse:
-    """Submit a batch AI processing job to the specified provider."""
+    """Submit one batch AI processing job containing all task×row combinations."""
     if request.provider in ("gemini", "groq"):
         raise HTTPException(
             status_code=400,
@@ -420,15 +481,17 @@ async def submit_batch(request: BatchSubmitRequest) -> BatchSubmitResponse:
         )
     if not request.rows:
         raise HTTPException(status_code=400, detail="No rows provided")
+    if not request.tasks:
+        raise HTTPException(status_code=400, detail="No tasks provided")
 
     try:
         if request.provider == "openai":
             batch_id = await _submit_openai(
-                request.api_key, request.column, request.task, request.rows
+                request.api_key, request.column, request.tasks, request.rows
             )
         elif request.provider == "anthropic":
             batch_id = await _submit_anthropic(
-                request.api_key, request.column, request.task, request.rows
+                request.api_key, request.column, request.tasks, request.rows
             )
         else:
             raise HTTPException(
@@ -444,12 +507,11 @@ async def submit_batch(request: BatchSubmitRequest) -> BatchSubmitResponse:
     _batch_store[batch_id] = {
         "provider": request.provider,
         "column": request.column,
-        "task": request.task,
+        "tasks": [{"task_description": s.task_description, "output_column_name": s.output_column_name} for s in request.tasks],
         "rows": request.rows,
         "identity_column": request.identity_column,
         "identity_values": request.identity_values or [],
         "all_rows": request.all_rows or [],
-        "output_column_name": request.output_column_name,
     }
     return BatchSubmitResponse(
         batch_id=batch_id, provider=request.provider, status="submitted"
@@ -502,8 +564,8 @@ async def download_batch_results(
 ) -> StreamingResponse:
     """Download completed batch results as CSV.
 
-    mode=raw    → identity_column + ai_result (falls back to input_column if no identity)
-    mode=merged → all original columns + ai_result
+    mode=raw    → identity_column + one output column per task
+    mode=merged → all original columns + one output column per task
     """
     stored = _batch_store.get(batch_id)
     if not stored:
@@ -514,6 +576,11 @@ async def download_batch_results(
 
     if mode not in ("raw", "merged"):
         raise HTTPException(status_code=400, detail="mode must be 'raw' or 'merged'")
+
+    task_specs = [
+        TaskSpec(task_description=t["task_description"], output_column_name=t["output_column_name"])
+        for t in stored.get("tasks", [])
+    ]
 
     try:
         if provider == "openai":
@@ -531,10 +598,8 @@ async def download_batch_results(
             status_code=502, detail=f"Download failed: {exc}"
         ) from exc
 
-    result_col: str = stored.get("output_column_name", "ai_output")
-
     if mode == "merged" and stored.get("all_rows"):
-        csv_text = _make_csv_merged(stored["all_rows"], results, result_col)
+        csv_text = _make_csv_merged(stored["all_rows"], results, task_specs)
         suffix = "merged"
     else:
         if stored.get("identity_column") and stored.get("identity_values"):
@@ -543,7 +608,7 @@ async def download_batch_results(
         else:
             label = stored["column"]
             label_values = stored["rows"]
-        csv_text = _make_csv_raw(label, label_values, results, result_col)
+        csv_text = _make_csv_raw(label, label_values, results, task_specs)
         suffix = "raw"
 
     filename = f"batch_{suffix}_{batch_id[:8]}.csv"
