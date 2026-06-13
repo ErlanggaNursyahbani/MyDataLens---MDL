@@ -57,6 +57,7 @@ type DashboardState = 'idle' | 'generating' | 'done' | 'error'
 
 type Top10Row = { label: string; value: number }
 type Top10Table = { title: string; index_col: string; value_col: string; rows: Top10Row[] }
+type Top10State = 'idle' | 'loading' | 'done' | 'error'
 
 type ChatMessage = {
   role: 'user' | 'assistant'
@@ -272,6 +273,7 @@ export default function DashboardPage() {
   const [dashboardResult, setDashboardResult] = useState<DashboardResult | null>(null)
   const [dashboardError, setDashboardError] = useState('')
   const [top10Tables, setTop10Tables] = useState<Top10Table[]>([])
+  const [top10State, setTop10State] = useState<Top10State>('idle')
 
   const kpis = useMemo(() => (result ? computeKPIs(result) : null), [result])
 
@@ -313,6 +315,7 @@ export default function DashboardPage() {
     setDashboardResult(null)
     setDashboardError('')
     setTop10Tables([])
+    setTop10State('idle')
     setActiveTab('overview')
     setIsChatOpen(false)
 
@@ -366,19 +369,29 @@ export default function DashboardPage() {
       setDashboardResult(data)
       setDashboardState('done')
 
-      // Top-10 tables — Pandas only, silent on failure
+      // Top-10 tables — Pandas only, non-fatal
+      setTop10State('loading')
       try {
+        console.log('[top10] request | rows:', result.all_rows.length, '| schema:', result.columns.map(c => `${c.name}:${c.dtype}`).join(', '))
         const t10res = await fetch('http://localhost:8000/analyze/top10', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ all_rows: result.all_rows, schema: result.columns }),
         })
+        console.log('[top10] response status:', t10res.status)
         if (t10res.ok) {
           const t10data = await t10res.json() as { tables: Top10Table[] }
+          console.log('[top10] tables received:', t10data.tables.length, t10data.tables.map(t => t.title))
           setTop10Tables(t10data.tables)
+          setTop10State('done')
+        } else {
+          const errBody = await t10res.text()
+          console.error('[top10] non-OK response:', t10res.status, errBody)
+          setTop10State('error')
         }
-      } catch {
-        // non-fatal
+      } catch (e) {
+        console.error('[top10] fetch error:', e)
+        setTop10State('error')
       }
     } catch (e) {
       setDashboardError(e instanceof Error ? e.message : 'Failed to generate dashboard')
@@ -453,6 +466,7 @@ export default function DashboardPage() {
     setDashboardResult(null)
     setDashboardError('')
     setTop10Tables([])
+    setTop10State('idle')
     setChatHistory([])
     setChatInput('')
     setChatState('idle')
@@ -766,39 +780,54 @@ export default function DashboardPage() {
                       )}
 
                       {/* Top 10 tables */}
-                      {top10Tables.length > 0 && (
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                          {top10Tables.map((table, ti) => {
-                            const max = table.rows[0]?.value ?? 1
-                            return (
-                              <div key={ti} className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-                                <h4 className="text-sm font-medium text-zinc-200 mb-4">{table.title}</h4>
-                                <ol className="space-y-2">
-                                  {table.rows.map((row, i) => (
-                                    <li key={i} className="flex items-center gap-3">
-                                      <span className="w-5 text-xs font-mono text-zinc-500 shrink-0 text-right">{i + 1}</span>
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center justify-between mb-1">
-                                          <span className="text-xs text-zinc-300 truncate max-w-[120px]">{row.label}</span>
-                                          <span className="text-xs font-mono text-indigo-300 shrink-0 ml-2">
-                                            {row.value.toLocaleString(undefined, { maximumFractionDigits: 1 })}
-                                          </span>
+                      <div>
+                        <h3 className="text-sm font-medium text-zinc-400 mb-3">Top 10 Rankings</h3>
+                        {top10State === 'loading' && (
+                          <div className="flex items-center gap-2 text-xs text-zinc-500 py-3">
+                            <span className="w-3 h-3 border border-zinc-600 border-t-zinc-400 rounded-full animate-spin" />
+                            Computing rankings…
+                          </div>
+                        )}
+                        {top10State === 'error' && (
+                          <p className="text-xs text-zinc-500 py-2">Could not load rankings — check browser console for details.</p>
+                        )}
+                        {top10State === 'done' && top10Tables.length === 0 && (
+                          <p className="text-xs text-zinc-500 py-2">No rankings available — dataset may have no categorical + numeric column pairs.</p>
+                        )}
+                        {top10State === 'done' && top10Tables.length > 0 && (
+                          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                            {top10Tables.map((table, ti) => {
+                              const max = Math.max(1, table.rows[0]?.value ?? 1)
+                              return (
+                                <div key={ti} className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
+                                  <h4 className="text-sm font-medium text-zinc-200 mb-4">{table.title}</h4>
+                                  <ol className="space-y-2">
+                                    {table.rows.map((row, i) => (
+                                      <li key={i} className="flex items-center gap-3">
+                                        <span className="w-5 text-xs font-mono text-zinc-500 shrink-0 text-right">{i + 1}</span>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center justify-between mb-1">
+                                            <span className="text-xs text-zinc-300 truncate max-w-[120px]">{row.label}</span>
+                                            <span className="text-xs font-mono text-indigo-300 shrink-0 ml-2">
+                                              {row.value.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                                            </span>
+                                          </div>
+                                          <div className="h-1 rounded-full bg-zinc-800 overflow-hidden">
+                                            <div
+                                              className="h-full rounded-full bg-indigo-500"
+                                              style={{ width: `${Math.max(4, (row.value / max) * 100).toFixed(1)}%` }}
+                                            />
+                                          </div>
                                         </div>
-                                        <div className="h-1 rounded-full bg-zinc-800 overflow-hidden">
-                                          <div
-                                            className="h-full rounded-full bg-indigo-500"
-                                            style={{ width: `${Math.max(4, (row.value / max) * 100).toFixed(1)}%` }}
-                                          />
-                                        </div>
-                                      </div>
-                                    </li>
-                                  ))}
-                                </ol>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )}
+                                      </li>
+                                    ))}
+                                  </ol>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
