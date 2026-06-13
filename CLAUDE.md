@@ -31,11 +31,22 @@ mydatalens/
 - Batch hanya aktif untuk provider yang support (OpenAI, Anthropic)
 
 ## Current Phase
-Phase 1 — Foundation:
-- [ ] Next.js project setup
-- [ ] FastAPI project setup
-- [ ] API Key setup UI
-- [ ] File upload & parsing
+Phase 1 — Foundation: ✅ COMPLETE
+- [x] Next.js project setup
+- [x] FastAPI project setup
+- [x] API Key setup UI
+- [x] File upload & parsing
+
+Phase 2 — Core Features (IN PROGRESS):
+- [x] API Key Setup UI (/api-setup)
+- [ ] File Upload & Parsing (backend + frontend)
+- [ ] Dynamic AI Dashboard Generation
+- [ ] Natural Language Chatbot
+
+Phase 3 — Batch Processing:
+- [ ] Batch AI Processing
+- [ ] Status Tracker (auto-polling + manual)
+- [ ] Download hasil batch sebagai CSV
 
 ## Commands
 # Frontend
