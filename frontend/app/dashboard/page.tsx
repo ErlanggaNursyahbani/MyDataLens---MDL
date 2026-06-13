@@ -638,34 +638,6 @@ export default function DashboardPage() {
             {activeTab === 'dashboard' && (
               <div className="mt-6 space-y-6">
 
-                {/* KPI Cards */}
-                {kpis && (
-                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-                    {[
-                      {
-                        label: 'Total Revenue',
-                        value: kpis.totalRevenue !== null
-                          ? kpis.totalRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })
-                          : 'N/A',
-                      },
-                      { label: 'Top Product', value: kpis.topProduct ?? 'N/A' },
-                      { label: 'Top Month', value: kpis.topMonth ?? 'N/A' },
-                      { label: 'Total Transactions', value: kpis.totalTransactions.toLocaleString() },
-                      {
-                        label: 'Avg Order Value',
-                        value: kpis.avgOrderValue !== null
-                          ? kpis.avgOrderValue.toLocaleString(undefined, { maximumFractionDigits: 2 })
-                          : 'N/A',
-                      },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="rounded-lg bg-zinc-800 px-4 py-3">
-                        <p className="text-lg font-bold text-white truncate">{value}</p>
-                        <p className="text-xs text-zinc-400 mt-1">{label}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
                 {/* AI Dashboard */}
                 <div>
                   {dashboardState === 'idle' && (
@@ -707,6 +679,35 @@ export default function DashboardPage() {
 
                   {dashboardState === 'done' && dashboardResult && (
                     <div className="space-y-5">
+
+                      {/* KPI Cards — shown only after AI generates */}
+                      {kpis && (
+                        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                          {[
+                            {
+                              label: 'Total Revenue',
+                              value: kpis.totalRevenue !== null
+                                ? kpis.totalRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                                : 'N/A',
+                            },
+                            { label: 'Top Product', value: kpis.topProduct ?? 'N/A' },
+                            { label: 'Top Month', value: kpis.topMonth ?? 'N/A' },
+                            { label: 'Total Transactions', value: kpis.totalTransactions.toLocaleString() },
+                            {
+                              label: 'Avg Order Value',
+                              value: kpis.avgOrderValue !== null
+                                ? kpis.avgOrderValue.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                                : 'N/A',
+                            },
+                          ].map(({ label, value }) => (
+                            <div key={label} className="rounded-lg bg-zinc-800 px-4 py-3">
+                              <p className="text-lg font-bold text-white truncate">{value}</p>
+                              <p className="text-xs text-zinc-400 mt-1">{label}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
                       <div className="flex items-center justify-between">
                         <h3 className="text-sm font-medium text-zinc-200">AI Dashboard</h3>
                         <button

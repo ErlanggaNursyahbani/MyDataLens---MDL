@@ -615,7 +615,7 @@ export default function BatchPage() {
                     </svg>
                     <span className="text-sm font-medium text-zinc-100">{fileName}</span>
                     <span className="text-xs text-zinc-500">
-                      {uploadResult.row_count.toLocaleString()} rows · {uploadResult.columns.length} columns
+                      {uploadResult?.row_count?.toLocaleString() ?? 0} rows · {uploadResult?.columns?.length ?? 0} columns
                     </span>
                   </div>
                   <button
@@ -633,7 +633,7 @@ export default function BatchPage() {
                     <span className="ml-1 text-zinc-500 font-normal">— the column AI will process</span>
                   </label>
                   <div className="flex flex-wrap gap-2">
-                    {uploadResult.columns.map((col) => (
+                    {uploadResult?.columns.map((col) => (
                       <button
                         key={col.name}
                         onClick={() => { setSelectedColumn(col.name); setShowConfirm(false) }}
@@ -695,7 +695,7 @@ export default function BatchPage() {
                       </div>
                       <div className="flex items-start gap-3">
                         <span className="text-zinc-500 w-24 shrink-0">Rows</span>
-                        <span className="text-zinc-100">{uploadResult.row_count.toLocaleString()}</span>
+                        <span className="text-zinc-100">{uploadResult?.row_count?.toLocaleString() ?? 0}</span>
                       </div>
                       <div className="flex items-start gap-3">
                         <span className="text-zinc-500 w-24 shrink-0">Task</span>
