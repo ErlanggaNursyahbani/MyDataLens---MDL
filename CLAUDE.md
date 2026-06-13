@@ -49,18 +49,27 @@ mydatalens/
 - [x] Chatbot markdown rendering (react-markdown)
 - [x] BatchPanel inline in Dashboard tab (refactored from separate page)
 
-### Sprint 2:
-- [ ] Batch multi-column input (multi-select)
-- [ ] Batch identity column + dual download (raw/merged)
-- [ ] Batch preview output (3-5 sample rows before submit)
+### Sprint 2 (In Progress):
+- [x] Batch multi-column input (multi-select chips UI)
+- [x] Batch identity column + dual download (raw/merged)
+- [x] Batch preview output (3 sample rows before submit)
+- [x] B1 — Change file button fixed (resets upload state)
+- [x] B2 — Multi-select input columns (chips UI)
+- [x] E1 — Custom output column name (default: ai_output)
+- [x] E2 — Multiple output columns (always-expanded cards, one batch job, N output columns in CSV)
+- [ ] E3 — Role/persona optional field (next)
+- [ ] E4 — Top 10 tables in Dashboard
+- [ ] E5 — Chatbot markdown polish
 
-### Sprint 3:
-- [ ] Tab 4: Merge Your Data (join 2 datasets, zero AI cost)
+### Sprint 3 (Planned):
+- [ ] Tab Merge — join 2 datasets + download CSV
+- [ ] Tab Transform — column config + split by N rows + download chunks
 - [ ] Model selection per provider
-- [ ] Dynamic provider support (DeepSeek, Qwen, custom base URL)
 
-### Sprint 4:
-- [ ] Dark/Light mode toggle
+### Sprint 4 (Planned):
+- [ ] Auto multi-batch from Transform tab (submit all chunks at once)
+- [ ] Multi-job status tracker UI
+- [ ] Error handling for oversized batch requests
 
 ### Sprint 5+:
 - [ ] Login / Auth system
