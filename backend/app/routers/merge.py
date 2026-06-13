@@ -63,6 +63,10 @@ class MergePreviewResponse(BaseModel):
     right_columns: int
     merged_count: int
     merged_columns: list[str]
+    left_dup_count: int = 0
+    left_dup_examples: list[str] = []
+    right_dup_count: int = 0
+    right_dup_examples: list[str] = []
 
 
 class MergeRequest(BaseModel):
@@ -74,13 +78,27 @@ class MergeRequest(BaseModel):
     output_filename: str | None = None
 
 
+def _dup_info(series: pd.Series) -> tuple[int, list[str]]:
+    """Return (count of unique duplicate values, up to 3 example strings)."""
+    duped = series[series.duplicated(keep=False)]
+    unique_dups = duped.dropna().unique()
+    return int(len(unique_dups)), [str(v) for v in unique_dups[:3]]
+
+
 @router.post("/preview", response_model=MergePreviewResponse)
 async def merge_preview(request: MergePreviewRequest) -> MergePreviewResponse:
-    """Return merge stats + first 5 rows — no file download."""
+    """Return merge stats + first 5 rows + duplicate-key warnings — no file download."""
     merged = _build_merged(
         request.left_rows, request.right_rows,
         request.left_key, request.right_key, request.how,
     )
+
+    # Duplicate-key detection on source DataFrames
+    left_df  = pd.DataFrame(request.left_rows)
+    right_df = pd.DataFrame(request.right_rows)
+    left_dup_count,  left_dup_examples  = _dup_info(left_df[request.left_key])
+    right_dup_count, right_dup_examples = _dup_info(right_df[request.right_key])
+
     preview = merged.head(5).where(pd.notnull(merged.head(5)), other=None)
     return MergePreviewResponse(
         preview_rows=preview.to_dict(orient="records"),
@@ -90,6 +108,10 @@ async def merge_preview(request: MergePreviewRequest) -> MergePreviewResponse:
         right_columns=len(request.right_rows[0]) if request.right_rows else 0,
         merged_count=len(merged),
         merged_columns=list(merged.columns),
+        left_dup_count=left_dup_count,
+        left_dup_examples=left_dup_examples,
+        right_dup_count=right_dup_count,
+        right_dup_examples=right_dup_examples,
     )
 
 

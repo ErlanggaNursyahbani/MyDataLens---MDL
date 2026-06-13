@@ -25,6 +25,10 @@ type MergePreviewData = {
   right_columns: number
   merged_count: number
   merged_columns: string[]
+  left_dup_count: number
+  left_dup_examples: string[]
+  right_dup_count: number
+  right_dup_examples: string[]
 }
 
 const HOW_OPTIONS: { value: HowOption; label: string }[] = [
@@ -320,6 +324,31 @@ export default function MergePanel({ initialUploadResult }: MergePanelProps) {
       {/* Preview result */}
       {previewData && (
         <div className="rounded-xl border border-zinc-700 bg-zinc-900 p-5 space-y-4">
+
+          {/* Duplicate key warnings */}
+          {(previewData.left_dup_count > 0 || previewData.right_dup_count > 0) && (
+            <div className="rounded-lg border border-amber-700/50 bg-amber-950/20 px-4 py-3 space-y-1.5">
+              {previewData.left_dup_count > 0 && (
+                <p className="text-xs text-amber-300">
+                  <span className="font-medium">⚠ Key column &lsquo;{leftKey}&rsquo;</span> has {previewData.left_dup_count} duplicate value{previewData.left_dup_count !== 1 ? 's' : ''} in Dataset 1
+                  {previewData.left_dup_examples.length > 0 && (
+                    <> (e.g. <span className="font-mono">{previewData.left_dup_examples.join(', ')}</span>)</>
+                  )}
+                  {' '}— this causes row multiplication. Consider using a unique identifier.
+                </p>
+              )}
+              {previewData.right_dup_count > 0 && (
+                <p className="text-xs text-amber-300">
+                  <span className="font-medium">⚠ Key column &lsquo;{rightKey}&rsquo;</span> has {previewData.right_dup_count} duplicate value{previewData.right_dup_count !== 1 ? 's' : ''} in Dataset 2
+                  {previewData.right_dup_examples.length > 0 && (
+                    <> (e.g. <span className="font-mono">{previewData.right_dup_examples.join(', ')}</span>)</>
+                  )}
+                  {' '}— this causes row multiplication. Consider using a unique identifier.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Before / after stats */}
           <div className="grid grid-cols-3 gap-3 text-center">
             <div className="rounded-lg bg-zinc-800 px-3 py-3">
