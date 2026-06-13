@@ -362,15 +362,24 @@ export default function DashboardPage() {
       {/* Nav */}
       <header className="border-b border-zinc-800 px-6 py-4 flex items-center justify-between">
         <h1 className="text-lg font-semibold tracking-tight">MyDataLens</h1>
-        <button
-          onClick={() => {
-            sessionStorage.clear()
-            router.push('/api-setup')
-          }}
-          className="text-xs text-zinc-500 hover:text-zinc-300 transition"
-        >
-          Change API Key
-        </button>
+        <nav className="flex items-center gap-5">
+          <button
+            onClick={() => router.push('/batch')}
+            className="text-xs text-zinc-400 hover:text-zinc-200 transition"
+          >
+            Batch Processing
+          </button>
+          <span className="w-px h-4 bg-zinc-700" />
+          <button
+            onClick={() => {
+              sessionStorage.clear()
+              router.push('/api-setup')
+            }}
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition"
+          >
+            Change API Key
+          </button>
+        </nav>
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-10">
