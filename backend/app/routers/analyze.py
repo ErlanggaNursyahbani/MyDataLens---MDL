@@ -1,5 +1,6 @@
 from typing import Any
 
+import pandas as pd
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -33,6 +34,79 @@ class ChartConfig(BaseModel):
 class AnalyzeResponse(BaseModel):
     charts: list[ChartConfig]
     insights: list[str]
+
+
+class SchemaItem(BaseModel):
+    name: str
+    dtype: str
+
+
+class Top10Request(BaseModel):
+    all_rows: list[dict[str, Any]]
+    schema: list[SchemaItem]
+
+
+class Top10Row(BaseModel):
+    label: str
+    value: float
+
+
+class Top10Table(BaseModel):
+    title: str
+    index_col: str
+    value_col: str
+    rows: list[Top10Row]
+
+
+class Top10Response(BaseModel):
+    tables: list[Top10Table]
+
+
+@router.post("/top10", response_model=Top10Response)
+async def top10_tables(request: Top10Request) -> Top10Response:
+    """Compute up to 3 Top-10 ranked tables using Pandas — no LLM involved."""
+    if not request.all_rows:
+        return Top10Response(tables=[])
+
+    df = pd.DataFrame(request.all_rows)
+    cat_cols = [s.name for s in request.schema if s.dtype == "string"]
+    num_cols = [s.name for s in request.schema if s.dtype in ("integer", "float")]
+
+    tables: list[Top10Table] = []
+    for cat_col in cat_cols:
+        if cat_col not in df.columns:
+            continue
+        for num_col in num_cols:
+            if len(tables) >= 3:
+                break
+            if num_col not in df.columns:
+                continue
+            try:
+                grouped = (
+                    df.groupby(cat_col, observed=True)[num_col]
+                    .sum()
+                    .reset_index()
+                    .sort_values(num_col, ascending=False)
+                    .head(10)
+                )
+                if len(grouped) < 2:
+                    continue
+                rows = [
+                    Top10Row(label=str(r[cat_col]), value=float(r[num_col]))
+                    for _, r in grouped.iterrows()
+                ]
+                tables.append(Top10Table(
+                    title=f"Top 10 {cat_col} by {num_col}",
+                    index_col=cat_col,
+                    value_col=num_col,
+                    rows=rows,
+                ))
+            except Exception:
+                continue
+        if len(tables) >= 3:
+            break
+
+    return Top10Response(tables=tables)
 
 
 @router.post("", response_model=AnalyzeResponse)

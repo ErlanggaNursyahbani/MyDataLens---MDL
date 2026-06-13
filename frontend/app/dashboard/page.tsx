@@ -53,6 +53,9 @@ type DashboardResult = {
 
 type DashboardState = 'idle' | 'generating' | 'done' | 'error'
 
+type Top10Row = { label: string; value: number }
+type Top10Table = { title: string; index_col: string; value_col: string; rows: Top10Row[] }
+
 type ChatMessage = {
   role: 'user' | 'assistant'
   content: string
@@ -265,6 +268,7 @@ export default function DashboardPage() {
   const [dashboardState, setDashboardState] = useState<DashboardState>('idle')
   const [dashboardResult, setDashboardResult] = useState<DashboardResult | null>(null)
   const [dashboardError, setDashboardError] = useState('')
+  const [top10Tables, setTop10Tables] = useState<Top10Table[]>([])
 
   const kpis = useMemo(() => (result ? computeKPIs(result) : null), [result])
 
@@ -305,6 +309,7 @@ export default function DashboardPage() {
     setDashboardState('idle')
     setDashboardResult(null)
     setDashboardError('')
+    setTop10Tables([])
     setActiveTab('overview')
     setIsChatOpen(false)
 
@@ -357,6 +362,21 @@ export default function DashboardPage() {
       const data = await res.json() as DashboardResult
       setDashboardResult(data)
       setDashboardState('done')
+
+      // Top-10 tables — Pandas only, silent on failure
+      try {
+        const t10res = await fetch('http://localhost:8000/analyze/top10', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ all_rows: result.all_rows, schema: result.columns }),
+        })
+        if (t10res.ok) {
+          const t10data = await t10res.json() as { tables: Top10Table[] }
+          setTop10Tables(t10data.tables)
+        }
+      } catch {
+        // non-fatal
+      }
     } catch (e) {
       setDashboardError(e instanceof Error ? e.message : 'Failed to generate dashboard')
       setDashboardState('error')
@@ -429,6 +449,7 @@ export default function DashboardPage() {
     setDashboardState('idle')
     setDashboardResult(null)
     setDashboardError('')
+    setTop10Tables([])
     setChatHistory([])
     setChatInput('')
     setChatState('idle')
@@ -738,6 +759,41 @@ export default function DashboardPage() {
                               </li>
                             ))}
                           </ul>
+                        </div>
+                      )}
+
+                      {/* Top 10 tables */}
+                      {top10Tables.length > 0 && (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                          {top10Tables.map((table, ti) => {
+                            const max = table.rows[0]?.value ?? 1
+                            return (
+                              <div key={ti} className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
+                                <h4 className="text-sm font-medium text-zinc-200 mb-4">{table.title}</h4>
+                                <ol className="space-y-2">
+                                  {table.rows.map((row, i) => (
+                                    <li key={i} className="flex items-center gap-3">
+                                      <span className="w-5 text-xs font-mono text-zinc-500 shrink-0 text-right">{i + 1}</span>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between mb-1">
+                                          <span className="text-xs text-zinc-300 truncate max-w-[120px]">{row.label}</span>
+                                          <span className="text-xs font-mono text-indigo-300 shrink-0 ml-2">
+                                            {row.value.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                                          </span>
+                                        </div>
+                                        <div className="h-1 rounded-full bg-zinc-800 overflow-hidden">
+                                          <div
+                                            className="h-full rounded-full bg-indigo-500"
+                                            style={{ width: `${Math.max(4, (row.value / max) * 100).toFixed(1)}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                    </li>
+                                  ))}
+                                </ol>
+                              </div>
+                            )
+                          })}
                         </div>
                       )}
                     </div>
