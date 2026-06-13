@@ -112,6 +112,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
   const [tasks, setTasks] = useState<TaskItem[]>([{ taskDescription: '', outputColumnName: 'ai_output' }])
   const [showPersona, setShowPersona] = useState(false)
   const [rolePersona, setRolePersona] = useState('')
+  const [outputFilename, setOutputFilename] = useState('')
 
   // Preview state
   const [isPreviewing, setIsPreviewing] = useState(false)
@@ -246,6 +247,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
     setTasks([{ taskDescription: '', outputColumnName: 'ai_output' }])
     setShowPersona(false)
     setRolePersona('')
+    setOutputFilename('')
     setShowConfirm(false)
     setPreviewRows(null)
     setPreviewError('')
@@ -418,6 +420,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
           identity_values: identityValues,
           all_rows: uploadResult?.all_rows ?? null,
           role_persona: rolePersona.trim() || null,
+          output_filename: outputFilename.trim() || null,
         }),
       })
       if (!submitRes.ok) {
@@ -504,6 +507,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
     setTasks([{ taskDescription: '', outputColumnName: 'ai_output' }])
     setShowPersona(false)
     setRolePersona('')
+    setOutputFilename('')
     setUploadError('')
     setSubmitError('')
     setShowConfirm(false)
@@ -878,6 +882,21 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* Output filename */}
+              <div>
+                <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+                  Output filename
+                  <span className="ml-1 text-zinc-600 font-normal">— optional, .csv is added automatically</span>
+                </label>
+                <input
+                  type="text"
+                  value={outputFilename}
+                  onChange={(e) => setOutputFilename(e.target.value)}
+                  placeholder="e.g. results_june_2026"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
               </div>
 
               {/* Preview error */}

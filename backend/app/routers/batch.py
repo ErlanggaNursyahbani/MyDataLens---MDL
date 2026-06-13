@@ -2,6 +2,7 @@ import asyncio
 import csv
 import io
 import json
+import re
 from typing import Annotated, Any
 
 import pandas as pd
@@ -67,6 +68,7 @@ class BatchSubmitRequest(BaseModel):
     identity_values: list[str] | None = None
     all_rows: list[dict[str, Any]] | None = None
     role_persona: str | None = None
+    output_filename: str | None = None
 
 
 class BatchSubmitResponse(BaseModel):
@@ -534,6 +536,7 @@ async def submit_batch(request: BatchSubmitRequest) -> BatchSubmitResponse:
         "identity_values": request.identity_values or [],
         "all_rows": request.all_rows or [],
         "role_persona": request.role_persona,
+        "output_filename": request.output_filename or None,
     }
     return BatchSubmitResponse(
         batch_id=batch_id, provider=request.provider, status="submitted"
@@ -633,7 +636,12 @@ async def download_batch_results(
         csv_text = _make_csv_raw(label, label_values, results, task_specs)
         suffix = "raw"
 
-    filename = f"batch_{suffix}_{batch_id[:8]}.csv"
+    custom_name = stored.get("output_filename")
+    if custom_name:
+        safe = re.sub(r"[^\w\-]", "_", custom_name.strip())[:80]
+        filename = f"{safe}_{suffix}.csv"
+    else:
+        filename = f"batch_{suffix}_{batch_id[:8]}.csv"
     return StreamingResponse(
         iter([csv_text]),
         media_type="text/csv",
