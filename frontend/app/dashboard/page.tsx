@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
+import BatchPanel from '../components/BatchPanel'
 import {
   Bar,
   BarChart,
@@ -59,7 +60,7 @@ type ChatMessage = {
 
 type ChatState = 'idle' | 'loading' | 'error'
 
-type ActiveTab = 'overview' | 'dashboard' | 'merge'
+type ActiveTab = 'overview' | 'dashboard' | 'batch' | 'merge'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -75,12 +76,12 @@ const TOOLTIP_STYLE = {
   fontSize: 12,
 }
 
-const TABS = [
-  { id: 'overview' as const, label: 'Overview' },
-  { id: 'dashboard' as const, label: 'Dashboard' },
-  { id: 'batch' as const, label: 'Batch' },
-  { id: 'merge' as const, label: 'Merge' },
-] satisfies { id: ActiveTab | 'batch'; label: string }[]
+const TABS: { id: ActiveTab; label: string }[] = [
+  { id: 'overview',  label: 'Overview' },
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'batch',     label: 'Batch' },
+  { id: 'merge',     label: 'Merge' },
+]
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -553,10 +554,7 @@ export default function DashboardPage() {
               {TABS.map(({ id, label }) => (
                 <button
                   key={id}
-                  onClick={() => {
-                    if (id === 'batch') { router.push('/batch'); return }
-                    setActiveTab(id)
-                  }}
+                  onClick={() => setActiveTab(id)}
                   className={[
                     'px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px',
                     activeTab === id
@@ -759,6 +757,13 @@ export default function DashboardPage() {
                   </button>
                 </div>
 
+              </div>
+            )}
+
+            {/* ── Batch tab ─────────────────────────────────────────────────── */}
+            {activeTab === 'batch' && (
+              <div className="mt-6">
+                <BatchPanel initialUploadResult={result} initialFileName={fileName} />
               </div>
             )}
 
