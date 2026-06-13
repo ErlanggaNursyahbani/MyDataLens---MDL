@@ -19,6 +19,13 @@ _BATCH_SYSTEM_PROMPT = (
     "Respond with only the result — no explanation, no preamble."
 )
 
+
+def _build_system_prompt(role_persona: str | None) -> str:
+    """Prepend optional role/persona to the base system prompt."""
+    if role_persona and role_persona.strip():
+        return f"{role_persona.strip()}\n\n{_BATCH_SYSTEM_PROMPT}"
+    return _BATCH_SYSTEM_PROMPT
+
 _ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
 
 
@@ -37,6 +44,7 @@ class BatchPreviewRequest(BaseModel):
     identity_values: list[str]
     provider: str
     api_key: str
+    role_persona: str | None = None
 
 
 class PreviewRow(BaseModel):
@@ -58,6 +66,7 @@ class BatchSubmitRequest(BaseModel):
     identity_column: str | None = None
     identity_values: list[str] | None = None
     all_rows: list[dict[str, Any]] | None = None
+    role_persona: str | None = None
 
 
 class BatchSubmitResponse(BaseModel):
@@ -129,12 +138,14 @@ def _make_csv_merged(
 
 
 async def _preview_openai(
-    api_key: str, column: str, tasks: list[TaskSpec], rows: list[str]
+    api_key: str, column: str, tasks: list[TaskSpec], rows: list[str],
+    role_persona: str | None = None,
 ) -> list[list[str]]:
     """Run sample rows through OpenAI for each task. Returns [task_idx][row_idx]."""
     from openai import AsyncOpenAI
 
     client = AsyncOpenAI(api_key=api_key)
+    system_prompt = _build_system_prompt(role_persona)
     all_results: list[list[str]] = []
     for task_spec in tasks:
         task_results: list[str] = []
@@ -142,7 +153,7 @@ async def _preview_openai(
             resp = await client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": _BATCH_SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": _user_content(task_spec.task_description, column, row)},
                 ],
                 max_tokens=500,
@@ -153,12 +164,14 @@ async def _preview_openai(
 
 
 async def _submit_openai(
-    api_key: str, column: str, tasks: list[TaskSpec], rows: list[str]
+    api_key: str, column: str, tasks: list[TaskSpec], rows: list[str],
+    role_persona: str | None = None,
 ) -> str:
     """Upload JSONL with all task×row combinations and create one OpenAI batch job."""
     from openai import AsyncOpenAI
 
     client = AsyncOpenAI(api_key=api_key)
+    system_prompt = _build_system_prompt(role_persona)
     lines = [
         json.dumps(
             {
@@ -168,7 +181,7 @@ async def _submit_openai(
                 "body": {
                     "model": "gpt-4o-mini",
                     "messages": [
-                        {"role": "system", "content": _BATCH_SYSTEM_PROMPT},
+                        {"role": "system", "content": system_prompt},
                         {"role": "user", "content": _user_content(task_spec.task_description, column, row)},
                     ],
                     "max_tokens": 500,
@@ -260,12 +273,14 @@ async def _get_results_openai(
 
 
 def _preview_anthropic_sync(
-    api_key: str, column: str, tasks: list[TaskSpec], rows: list[str]
+    api_key: str, column: str, tasks: list[TaskSpec], rows: list[str],
+    role_persona: str | None = None,
 ) -> list[list[str]]:
     """Run sample rows through Anthropic for each task. Returns [task_idx][row_idx]."""
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
+    system_prompt = _build_system_prompt(role_persona)
     all_results: list[list[str]] = []
     for task_spec in tasks:
         task_results: list[str] = []
@@ -273,6 +288,7 @@ def _preview_anthropic_sync(
             resp = client.messages.create(
                 model="claude-haiku-4-5-20251001",
                 max_tokens=500,
+                system=system_prompt,
                 messages=[{"role": "user", "content": _user_content(task_spec.task_description, column, row)}],
             )
             task_results.append(resp.content[0].text if resp.content else "")
@@ -281,24 +297,28 @@ def _preview_anthropic_sync(
 
 
 async def _preview_anthropic(
-    api_key: str, column: str, tasks: list[TaskSpec], rows: list[str]
+    api_key: str, column: str, tasks: list[TaskSpec], rows: list[str],
+    role_persona: str | None = None,
 ) -> list[list[str]]:
-    return await asyncio.to_thread(_preview_anthropic_sync, api_key, column, tasks, rows)
+    return await asyncio.to_thread(_preview_anthropic_sync, api_key, column, tasks, rows, role_persona)
 
 
 def _submit_anthropic_sync(
-    api_key: str, column: str, tasks: list[TaskSpec], rows: list[str]
+    api_key: str, column: str, tasks: list[TaskSpec], rows: list[str],
+    role_persona: str | None = None,
 ) -> str:
     """Create one Anthropic Message Batch with all task×row combinations."""
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
+    system_prompt = _build_system_prompt(role_persona)
     requests = [
         {
             "custom_id": f"row_{r}_task_{t}",
             "params": {
                 "model": "claude-haiku-4-5-20251001",
                 "max_tokens": 500,
+                "system": system_prompt,
                 "messages": [
                     {"role": "user", "content": _user_content(task_spec.task_description, column, row)}
                 ],
@@ -312,9 +332,10 @@ def _submit_anthropic_sync(
 
 
 async def _submit_anthropic(
-    api_key: str, column: str, tasks: list[TaskSpec], rows: list[str]
+    api_key: str, column: str, tasks: list[TaskSpec], rows: list[str],
+    role_persona: str | None = None,
 ) -> str:
-    return await asyncio.to_thread(_submit_anthropic_sync, api_key, column, tasks, rows)
+    return await asyncio.to_thread(_submit_anthropic_sync, api_key, column, tasks, rows, role_persona)
 
 
 def _status_anthropic_sync(api_key: str, batch_id: str) -> dict[str, Any]:
@@ -442,11 +463,11 @@ async def preview_batch(request: BatchPreviewRequest) -> BatchPreviewResponse:
         if request.provider == "openai":
             # outputs_by_task[task_idx][row_idx]
             outputs_by_task = await _preview_openai(
-                request.api_key, request.column, request.tasks, sample_rows
+                request.api_key, request.column, request.tasks, sample_rows, request.role_persona
             )
         elif request.provider == "anthropic":
             outputs_by_task = await _preview_anthropic(
-                request.api_key, request.column, request.tasks, sample_rows
+                request.api_key, request.column, request.tasks, sample_rows, request.role_persona
             )
         else:
             raise HTTPException(
@@ -487,11 +508,11 @@ async def submit_batch(request: BatchSubmitRequest) -> BatchSubmitResponse:
     try:
         if request.provider == "openai":
             batch_id = await _submit_openai(
-                request.api_key, request.column, request.tasks, request.rows
+                request.api_key, request.column, request.tasks, request.rows, request.role_persona
             )
         elif request.provider == "anthropic":
             batch_id = await _submit_anthropic(
-                request.api_key, request.column, request.tasks, request.rows
+                request.api_key, request.column, request.tasks, request.rows, request.role_persona
             )
         else:
             raise HTTPException(
@@ -512,6 +533,7 @@ async def submit_batch(request: BatchSubmitRequest) -> BatchSubmitResponse:
         "identity_column": request.identity_column,
         "identity_values": request.identity_values or [],
         "all_rows": request.all_rows or [],
+        "role_persona": request.role_persona,
     }
     return BatchSubmitResponse(
         batch_id=batch_id, provider=request.provider, status="submitted"
