@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import BatchPanel from '../components/BatchPanel'
+import MergePanel from '../components/MergePanel'
 import {
   Bar,
   BarChart,
@@ -825,14 +826,8 @@ export default function DashboardPage() {
 
             {/* ── Merge tab ─────────────────────────────────────────────────── */}
             {activeTab === 'merge' && (
-              <div className="mt-6 flex flex-col items-center justify-center py-24 gap-4">
-                <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-zinc-500">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
-                  </svg>
-                </div>
-                <p className="text-base font-medium text-zinc-300">Merge Your Data</p>
-                <p className="text-sm text-zinc-500">Coming soon — join 2 datasets without AI cost</p>
+              <div className="mt-6">
+                <MergePanel initialUploadResult={result} />
               </div>
             )}
 

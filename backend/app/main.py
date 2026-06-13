@@ -9,7 +9,7 @@ if os.path.isdir(_vendor) and _vendor not in sys.path:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import analyze, batch, chat, upload
+from app.routers import analyze, batch, chat, merge, upload
 
 app = FastAPI(title="MyDataLens API", version="0.1.0")
 
@@ -25,6 +25,7 @@ app.include_router(upload.router)
 app.include_router(analyze.router)
 app.include_router(chat.router)
 app.include_router(batch.router)
+app.include_router(merge.router)
 
 
 @app.get("/health")
