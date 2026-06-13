@@ -12,7 +12,13 @@ Personal AI-powered data analysis tool. User upload CSV/Excel → AI generate dy
 
 ## Project Structure
 mydatalens/
-├── frontend/        # Next.js app
+├── frontend/
+│   └── app/
+│       ├── dashboard/page.tsx      # Main page: tabs (Overview, Dashboard, Batch, Merge)
+│       ├── batch/page.tsx          # Redirects to /dashboard
+│       ├── api-setup/page.tsx      # API key setup
+│       └── components/
+│           └── BatchPanel.tsx      # Batch processing panel (embedded in Dashboard Batch tab)
 ├── backend/         # FastAPI app
 ├── docs/            # PRD and documentation
 ├── CLAUDE.md        # This file
@@ -29,6 +35,9 @@ mydatalens/
 - API key TIDAK BOLEH disimpan di server — hanya session storage browser
 - AI hanya terima schema + max 20 baris sample — BUKAN full file
 - Batch hanya aktif untuk provider yang support (OpenAI, Anthropic)
+- Upload result (schema + all_rows) disimpan di sessionStorage (mdl_upload_result, mdl_upload_filename)
+- Batch panel embedded di Dashboard tab, bukan halaman terpisah — /batch redirect ke /dashboard
+- BatchPanel menerima initialUploadResult prop; extract kolom dari all_rows (client-side) jika tersedia
 
 ## Master Feature List
 
@@ -36,6 +45,9 @@ mydatalens/
 - [x] Tab Navigation (Overview, Dashboard, Batch, Merge)
 - [x] Chatbot floating button + slide panel
 - [x] KPI cards consistency fix (full dataset)
+- [x] State persist: upload result saved/restored via sessionStorage
+- [x] Chatbot markdown rendering (react-markdown)
+- [x] BatchPanel inline in Dashboard tab (refactored from separate page)
 
 ### Sprint 2:
 - [ ] Batch multi-column input (multi-select)
