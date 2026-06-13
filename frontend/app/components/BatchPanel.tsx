@@ -103,7 +103,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
 
   // Configure state
   const [identityColumn, setIdentityColumn] = useState('')
-  const [selectedColumn, setSelectedColumn] = useState('')
+  const [selectedColumns, setSelectedColumns] = useState<string[]>([])
   const [task, setTask] = useState('')
 
   // Preview state
@@ -235,7 +235,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
     setUploadError('')
     setUploadResult(null)
     setIdentityColumn('')
-    setSelectedColumn('')
+    setSelectedColumns([])
     setTask('')
     setShowConfirm(false)
     setPreviewRows(null)
@@ -275,7 +275,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
   }
 
   async function handlePreview() {
-    if (!selectedColumn || !task.trim() || !uploadResult) return
+    if (selectedColumns.length === 0 || !task.trim() || !uploadResult) return
 
     setIsPreviewing(true)
     setPreviewError('')
@@ -284,10 +284,15 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
     const source = uploadResult.all_rows ?? uploadResult.sample
     const sampleRows = source.slice(0, 3)
 
-    const inputValues = sampleRows.map(row => {
-      const v = row[selectedColumn]
-      return v !== null && v !== undefined ? String(v) : ''
-    })
+    const inputValues = sampleRows.map(row =>
+      selectedColumns
+        .map(col => {
+          const v = row[col]
+          return v !== null && v !== undefined ? `${col}: ${String(v)}` : ''
+        })
+        .filter(Boolean)
+        .join(' | ')
+    )
     const identityValues = sampleRows.map(row => {
       if (!identityColumn) return ''
       const v = row[identityColumn]
@@ -299,7 +304,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          column: selectedColumn,
+          column: selectedColumns.join(', '),
           task: task.trim(),
           rows: inputValues,
           identity_values: identityValues,
@@ -322,7 +327,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
   }
 
   async function handleSubmit() {
-    if (!selectedColumn || !task.trim()) return
+    if (selectedColumns.length === 0 || !task.trim()) return
     if (!uploadResult?.all_rows?.length && !file) return
 
     setIsSubmitting(true)
@@ -334,10 +339,15 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
 
       if (uploadResult?.all_rows?.length) {
         values = uploadResult.all_rows
-          .map(row => {
-            const v = row[selectedColumn]
-            return v !== null && v !== undefined ? String(v) : ''
-          })
+          .map(row =>
+            selectedColumns
+              .map(col => {
+                const v = row[col]
+                return v !== null && v !== undefined ? `${col}: ${String(v)}` : ''
+              })
+              .filter(Boolean)
+              .join(' | ')
+          )
           .filter(v => v.length > 0)
         identityValues = uploadResult.all_rows.map(row => {
           if (!identityColumn) return ''
@@ -345,20 +355,33 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
           return v !== null && v !== undefined ? String(v) : ''
         })
       } else if (file) {
-        const formData = new FormData()
-        formData.append('file', file)
-        formData.append('column', selectedColumn)
-
-        const extractRes = await fetch('http://localhost:8000/batch/extract-column', {
-          method: 'POST',
-          body: formData,
-        })
-        if (!extractRes.ok) {
-          const err = await extractRes.json() as { detail?: string }
-          throw new Error(err.detail ?? `HTTP ${extractRes.status}`)
+        // Extract each selected column from the file and combine row-by-row
+        const extractedByColumn: string[][] = []
+        for (const col of selectedColumns) {
+          const formData = new FormData()
+          formData.append('file', file)
+          formData.append('column', col)
+          const extractRes = await fetch('http://localhost:8000/batch/extract-column', {
+            method: 'POST',
+            body: formData,
+          })
+          if (!extractRes.ok) {
+            const err = await extractRes.json() as { detail?: string }
+            throw new Error(err.detail ?? `HTTP ${extractRes.status}`)
+          }
+          const { values: extracted } = await extractRes.json() as { values: string[]; count: number }
+          extractedByColumn.push(extracted)
         }
-        const { values: extracted } = await extractRes.json() as { values: string[]; count: number }
-        values = extracted
+        const numRows = extractedByColumn[0]?.length ?? 0
+        values = Array.from({ length: numRows }, (_, i) =>
+          selectedColumns
+            .map((col, ci) => {
+              const v = extractedByColumn[ci]?.[i] ?? ''
+              return v ? `${col}: ${v}` : ''
+            })
+            .filter(Boolean)
+            .join(' | ')
+        ).filter(v => v.length > 0)
         identityValues = []
       } else {
         throw new Error('No data source available for batch processing')
@@ -368,7 +391,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          column: selectedColumn,
+          column: selectedColumns.join(', '),
           task: task.trim(),
           rows: values,
           provider,
@@ -458,7 +481,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
   function resetAll() {
     setFile(null)
     setIdentityColumn('')
-    setSelectedColumn('')
+    setSelectedColumns([])
     setTask('')
     setUploadError('')
     setSubmitError('')
@@ -475,8 +498,8 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
     localStorage.removeItem('mdl_batch_id')
     localStorage.removeItem('mdl_batch_provider')
     if (fileInputRef.current) fileInputRef.current.value = ''
-    setUploadResult(initialUploadResult)
-    setFileName(initialUploadResult ? initialFileName : '')
+    setUploadResult(null)
+    setFileName('')
   }
 
   // ── Render ────────────────────────────────────────────────────────────────────
@@ -657,30 +680,65 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
               {/* Input column selector */}
               <div>
                 <label className="block text-sm font-medium text-zinc-300 mb-2">
-                  Input column
-                  <span className="ml-1 text-zinc-500 font-normal">— the column AI will process</span>
+                  Input columns
+                  <span className="ml-1 text-zinc-500 font-normal">— columns AI will process (select one or more)</span>
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {uploadResult.columns.map((col) => (
                     <button
                       key={col.name}
                       onClick={() => {
-                        setSelectedColumn(col.name)
+                        setSelectedColumns(prev =>
+                          prev.includes(col.name)
+                            ? prev.filter(c => c !== col.name)
+                            : [...prev, col.name]
+                        )
                         setShowConfirm(false)
                         setPreviewRows(null)
                       }}
                       className={[
                         'flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-sm transition',
-                        selectedColumn === col.name
+                        selectedColumns.includes(col.name)
                           ? 'border-indigo-500 bg-indigo-950/60 text-indigo-200'
                           : 'border-zinc-800 bg-zinc-900 text-zinc-300 hover:border-zinc-600',
                       ].join(' ')}
                     >
+                      {selectedColumns.includes(col.name) && (
+                        <svg className="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clipRule="evenodd" />
+                        </svg>
+                      )}
                       {col.name}
                       <span className={`text-xs font-mono ${dtypeColor(col.dtype)}`}>{col.dtype}</span>
                     </button>
                   ))}
                 </div>
+                {selectedColumns.length > 0 && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-zinc-500">Selected:</span>
+                    {selectedColumns.map(col => (
+                      <span
+                        key={col}
+                        className="inline-flex items-center gap-1 rounded-full border border-indigo-600 bg-indigo-950/50 pl-2.5 pr-1.5 py-0.5 text-xs text-indigo-200"
+                      >
+                        {col}
+                        <button
+                          onClick={() => {
+                            setSelectedColumns(prev => prev.filter(c => c !== col))
+                            setShowConfirm(false)
+                            setPreviewRows(null)
+                          }}
+                          className="ml-0.5 rounded-full hover:bg-indigo-800/50 p-0.5 transition"
+                          aria-label={`Remove ${col}`}
+                        >
+                          <svg className="w-3 h-3" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                          </svg>
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Task input */}
@@ -719,7 +777,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
               {!showConfirm ? (
                 <button
                   onClick={() => void handlePreview()}
-                  disabled={!selectedColumn || !task.trim() || isPreviewing}
+                  disabled={selectedColumns.length === 0 || !task.trim() || isPreviewing}
                   className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-40 px-5 py-2.5 text-sm font-medium text-white transition"
                 >
                   {isPreviewing ? (
@@ -757,7 +815,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
                               </th>
                             )}
                             <th className="px-3 py-2 text-left font-medium text-indigo-400 whitespace-nowrap">
-                              {selectedColumn}
+                              {selectedColumns.join(', ')}
                             </th>
                             <th className="px-3 py-2 text-left font-medium text-emerald-400 whitespace-nowrap">
                               AI output
