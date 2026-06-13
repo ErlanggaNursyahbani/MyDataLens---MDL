@@ -30,23 +30,29 @@ mydatalens/
 - AI hanya terima schema + max 20 baris sample — BUKAN full file
 - Batch hanya aktif untuk provider yang support (OpenAI, Anthropic)
 
-## Current Phase
-Phase 1 — Foundation: ✅ COMPLETE
-Phase 2 — Core Features: ✅ COMPLETE
-- [x] API Key Setup UI (/api-setup)
-- [x] File Upload & Parsing
-- [x] Dynamic AI Dashboard Generation
-- [x] Natural Language Chatbot
+## Master Feature List
 
-Phase 3 — Batch Processing: ✅ COMPLETE
-- [x] Batch AI Processing (OpenAI + Anthropic)
-- [x] Status Tracker (auto-polling + manual)
-- [x] Download hasil batch sebagai CSV
+### Sprint 1 (Current):
+- [ ] Tab Navigation (Overview, Dashboard, Batch, Merge)
+- [ ] Chatbot floating button + slide panel
+- [ ] KPI cards consistency fix (full dataset)
 
-Phase 4 — Polish & Enhancement: ⬜ IN PROGRESS
-- [ ] localStorage fix for batch state
-- [ ] KPI Cards on dashboard
-- [ ] Figma design refresh
+### Sprint 2:
+- [ ] Batch multi-column input (multi-select)
+- [ ] Batch identity column + dual download (raw/merged)
+- [ ] Batch preview output (3-5 sample rows before submit)
+
+### Sprint 3:
+- [ ] Tab 4: Merge Your Data (join 2 datasets, zero AI cost)
+- [ ] Model selection per provider
+- [ ] Dynamic provider support (DeepSeek, Qwen, custom base URL)
+
+### Sprint 4:
+- [ ] Dark/Light mode toggle
+
+### Sprint 5+:
+- [ ] Login / Auth system
+- [ ] Admin dashboard (pre-deploy)
 
 ## Commands
 # Frontend
