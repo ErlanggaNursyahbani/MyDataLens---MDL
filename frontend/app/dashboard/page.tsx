@@ -50,6 +50,13 @@ type DashboardResult = {
 
 type DashboardState = 'idle' | 'generating' | 'done' | 'error'
 
+type ChatMessage = {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+type ChatState = 'idle' | 'loading' | 'error'
+
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const ACCEPTED = '.csv,.xlsx,.xls'
@@ -188,6 +195,7 @@ function renderChart(chart: ChartConfig) {
 export default function DashboardPage() {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
+  const chatBottomRef = useRef<HTMLDivElement>(null)
 
   const [state, setState] = useState<UploadState>('idle')
   const [result, setResult] = useState<UploadResult | null>(null)
@@ -199,11 +207,20 @@ export default function DashboardPage() {
   const [dashboardResult, setDashboardResult] = useState<DashboardResult | null>(null)
   const [dashboardError, setDashboardError] = useState('')
 
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatState, setChatState] = useState<ChatState>('idle')
+  const [chatError, setChatError] = useState('')
+
   useEffect(() => {
     if (!sessionStorage.getItem('mdl_api_key')) {
       router.replace('/api-setup')
     }
   }, [router])
+
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatHistory])
 
   const uploadFile = useCallback(async (file: File) => {
     setState('uploading')
@@ -284,6 +301,47 @@ export default function DashboardPage() {
     if (file) void uploadFile(file)
   }
 
+  async function sendChat(e: React.FormEvent) {
+    e.preventDefault()
+    if (!result || !chatInput.trim() || chatState === 'loading') return
+
+    const apiKey = sessionStorage.getItem('mdl_api_key') ?? ''
+    const provider = sessionStorage.getItem('mdl_provider') ?? 'openai'
+    const userMessage = chatInput.trim()
+
+    setChatInput('')
+    setChatError('')
+    setChatState('loading')
+
+    const newHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: userMessage }]
+    setChatHistory(newHistory)
+
+    try {
+      const res = await fetch('http://localhost:8000/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: userMessage,
+          columns: result.columns,
+          sample: result.sample,
+          history: chatHistory,
+          provider,
+          api_key: apiKey,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json() as { detail?: string }
+        throw new Error(err.detail ?? `HTTP ${res.status}`)
+      }
+      const data = await res.json() as { reply: string }
+      setChatHistory([...newHistory, { role: 'assistant', content: data.reply }])
+      setChatState('idle')
+    } catch (e) {
+      setChatError(e instanceof Error ? e.message : 'Failed to get response')
+      setChatState('error')
+    }
+  }
+
   function reset() {
     setState('idle')
     setResult(null)
@@ -292,6 +350,10 @@ export default function DashboardPage() {
     setDashboardState('idle')
     setDashboardResult(null)
     setDashboardError('')
+    setChatHistory([])
+    setChatInput('')
+    setChatState('idle')
+    setChatError('')
     if (inputRef.current) inputRef.current.value = ''
   }
 
@@ -456,7 +518,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* ── AI Dashboard ─────────────────────────────────────────────── */}
+            {/* ── AI Dashboard ─────────────────────────────────────────────────── */}
             <div className="border-t border-zinc-800 pt-6">
 
               {dashboardState === 'idle' && (
@@ -536,6 +598,85 @@ export default function DashboardPage() {
               )}
 
             </div>
+
+            {/* ── Chat Panel ───────────────────────────────────────────────────── */}
+            <div className="border-t border-zinc-800 pt-6">
+              <h3 className="text-sm font-medium text-zinc-200 mb-4">Ask about your data</h3>
+
+              {/* Message history */}
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900 flex flex-col h-96">
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {chatHistory.length === 0 && (
+                    <p className="text-sm text-zinc-500 italic text-center mt-8">
+                      Ask anything about your dataset — trends, outliers, statistics…
+                    </p>
+                  )}
+                  {chatHistory.map((msg, i) => (
+                    <div
+                      key={i}
+                      className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    >
+                      <div
+                        className={[
+                          'max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed',
+                          msg.role === 'user'
+                            ? 'bg-indigo-600 text-white rounded-br-sm'
+                            : 'bg-zinc-800 text-zinc-100 rounded-bl-sm',
+                        ].join(' ')}
+                      >
+                        {msg.content}
+                      </div>
+                    </div>
+                  ))}
+                  {chatState === 'loading' && (
+                    <div className="flex justify-start">
+                      <div className="bg-zinc-800 rounded-2xl rounded-bl-sm px-4 py-3 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce [animation-delay:0ms]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce [animation-delay:150ms]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce [animation-delay:300ms]" />
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatBottomRef} />
+                </div>
+
+                {/* Error banner */}
+                {chatState === 'error' && (
+                  <div className="px-4 py-2 border-t border-zinc-800 bg-red-950/30 flex items-center justify-between gap-3">
+                    <p className="text-xs text-red-300 truncate">{chatError}</p>
+                    <button
+                      onClick={() => setChatState('idle')}
+                      className="text-xs text-red-400 hover:text-red-200 transition shrink-0"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                )}
+
+                {/* Input row */}
+                <form
+                  onSubmit={(e) => void sendChat(e)}
+                  className="border-t border-zinc-800 p-3 flex gap-2"
+                >
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder="Ask a question about your data…"
+                    disabled={chatState === 'loading'}
+                    className="flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!chatInput.trim() || chatState === 'loading'}
+                    className="rounded-lg bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 disabled:opacity-40 px-4 py-2 text-sm font-medium text-white transition"
+                  >
+                    Send
+                  </button>
+                </form>
+              </div>
+            </div>
+
           </div>
         )}
       </main>

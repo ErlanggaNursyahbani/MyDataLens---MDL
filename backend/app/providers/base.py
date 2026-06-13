@@ -2,6 +2,11 @@ import json
 import re
 from typing import Any
 
+CHAT_SYSTEM_PROMPT = (
+    "You are a data analyst assistant. Answer questions about the dataset based on the schema "
+    "and sample provided. Be concise, specific, and reference column names when relevant."
+)
+
 DASHBOARD_SYSTEM_PROMPT = """You are a data analysis expert. Analyze the given dataset schema and sample rows, then generate a dashboard configuration.
 
 Return ONLY a valid JSON object. No markdown, no code blocks, no explanation — raw JSON only.
@@ -52,6 +57,16 @@ def build_user_prompt(schema: list[dict[str, str]], sample: list[dict[str, Any]]
         f"Dataset schema:\n{json.dumps(schema, ensure_ascii=False)}\n\n"
         f"Sample data ({len(rows)} rows):\n{json.dumps(rows, ensure_ascii=False, default=str)}"
     )
+
+
+def build_chat_system_prompt(schema: list[dict[str, str]], sample: list[dict[str, Any]]) -> str:
+    """Build the chat system prompt that includes dataset context."""
+    rows = sample[:20]
+    context = (
+        f"\n\nDataset schema:\n{json.dumps(schema, ensure_ascii=False)}\n\n"
+        f"Sample data ({len(rows)} rows):\n{json.dumps(rows, ensure_ascii=False, default=str)}"
+    )
+    return CHAT_SYSTEM_PROMPT + context
 
 
 def parse_dashboard_json(text: str) -> dict[str, Any]:
