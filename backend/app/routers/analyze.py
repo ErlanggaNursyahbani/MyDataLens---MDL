@@ -68,9 +68,18 @@ async def top10_tables(request: Top10Request) -> Top10Response:
     if not request.all_rows:
         return Top10Response(tables=[])
 
-    df = pd.DataFrame(request.all_rows)
+    try:
+        df = pd.DataFrame(request.all_rows)
+    except Exception:
+        return Top10Response(tables=[])
+
     cat_cols = [s.name for s in request.schema if s.dtype == "string"]
     num_cols = [s.name for s in request.schema if s.dtype in ("integer", "float")]
+
+    # Explicit coercion — pandas 3.x may infer object dtype for columns containing None
+    for col in num_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
 
     tables: list[Top10Table] = []
     for cat_col in cat_cols:
@@ -82,8 +91,11 @@ async def top10_tables(request: Top10Request) -> Top10Response:
             if num_col not in df.columns:
                 continue
             try:
+                sub = df[[cat_col, num_col]].dropna(subset=[num_col])
+                if sub.empty:
+                    continue
                 grouped = (
-                    df.groupby(cat_col, observed=True)[num_col]
+                    sub.groupby(cat_col, observed=True)[num_col]
                     .sum()
                     .reset_index()
                     .sort_values(num_col, ascending=False)
