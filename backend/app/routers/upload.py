@@ -18,6 +18,7 @@ class ColumnInfo(BaseModel):
 class UploadResponse(BaseModel):
     columns: list[ColumnInfo]
     sample: list[dict[str, Any]]
+    all_rows: list[dict[str, Any]]
     row_count: int
 
 
@@ -37,9 +38,9 @@ def _map_dtype(dtype: Any) -> str:
     return name
 
 
-def _serialize_sample(df: pd.DataFrame) -> list[dict[str, Any]]:
-    """Convert first 20 rows to a JSON-safe list of dicts."""
-    rows = df.head(20).copy()
+def _serialize_rows(df: pd.DataFrame) -> list[dict[str, Any]]:
+    """Convert DataFrame rows to a JSON-safe list of dicts."""
+    rows = df.copy()
     for col in rows.columns:
         if pd.api.types.is_datetime64_any_dtype(rows[col]):
             rows[col] = rows[col].dt.strftime("%Y-%m-%dT%H:%M:%S")
@@ -49,7 +50,7 @@ def _serialize_sample(df: pd.DataFrame) -> list[dict[str, Any]]:
 
 @router.post("", response_model=UploadResponse)
 async def upload_file(file: UploadFile = File(...)) -> UploadResponse:
-    """Parse an uploaded CSV or Excel file and return schema + sample rows."""
+    """Parse an uploaded CSV or Excel file and return schema + sample + all rows."""
     filename = file.filename or ""
     ext = ("." + filename.rsplit(".", 1)[-1].lower()) if "." in filename else ""
 
@@ -78,6 +79,7 @@ async def upload_file(file: UploadFile = File(...)) -> UploadResponse:
 
     return UploadResponse(
         columns=columns,
-        sample=_serialize_sample(df),
+        sample=_serialize_rows(df.head(20)),
+        all_rows=_serialize_rows(df),
         row_count=len(df),
     )
