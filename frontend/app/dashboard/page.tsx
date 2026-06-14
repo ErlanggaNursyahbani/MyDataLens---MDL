@@ -260,6 +260,8 @@ export default function DashboardPage() {
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
   const chatBottomRef = useRef<HTMLDivElement>(null)
+  const headerRef = useRef<HTMLElement>(null)
+  const lastScrollY = useRef(0)
 
   const [state, setState] = useState<UploadState>('idle')
   const [result, setResult] = useState<UploadResult | null>(null)
@@ -305,6 +307,20 @@ export default function DashboardPage() {
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatHistory])
+
+  useEffect(() => {
+    function onScroll() {
+      const y = window.scrollY
+      if (y < lastScrollY.current) {
+        headerRef.current?.classList.remove('-translate-y-full')
+      } else if (y > lastScrollY.current && y > 60) {
+        headerRef.current?.classList.add('-translate-y-full')
+      }
+      lastScrollY.current = y
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   const uploadFile = useCallback(async (file: File) => {
     setState('uploading')
@@ -484,7 +500,10 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
 
       {/* ── Nav ──────────────────────────────────────────────────────────────── */}
-      <header className="border-b border-zinc-800 px-6 py-4 flex items-center justify-between">
+      <header
+        ref={headerRef}
+        className="sticky top-0 z-30 border-b border-zinc-800 bg-zinc-950 px-6 py-4 flex items-center justify-between transition-transform duration-200"
+      >
         <h1 className="text-lg font-semibold tracking-tight">MyDataLens</h1>
         <button
           onClick={() => {
