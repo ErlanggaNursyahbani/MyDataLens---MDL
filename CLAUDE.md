@@ -94,7 +94,7 @@ mydatalens/
 - Merge + Transform panels menerima `initialUploadResult` prop
 - Merge panel uploads second file via /upload endpoint (reuses parse logic)
 - BatchPanel juga bisa upload file sendiri (fallback jika all_rows tidak tersedia)
-- Overview tab data preview menampilkan 50 baris pertama (bukan 20)
+- Overview tab data preview — default 10 baris, user bisa pilih 10/50/100/Custom via selector, tabel scroll internal (max-h-500px), tidak grow halaman
 
 ## Hardcoded Models (Sprint 3 limitation)
 Batch operations menggunakan model hardcoded — belum ada model selection:
@@ -143,7 +143,13 @@ Batch operations menggunakan model hardcoded — belum ada model selection:
 - [x] E4 bug fix — frontend: Top10State tracking, console.log trace, persistent "Top 10 Rankings" section
 - [ ] Model selection per provider (Sprint 3 last item — NOT YET STARTED)
 
-### Sprint 4 (Planned):
+### Sprint 4 — UX Polish Batch 1 (Done):
+- [x] Consistent container width — removed max-w-2xl from MergePanel + TransformPanel
+- [x] Sticky navbar with hide-on-scroll (slides up on scroll down >60px, reappears on scroll up, 200ms transition)
+- [x] Overview table row limit selector (10/50/100/Custom) + internal scroll (max-h-[500px])
+- [x] Replace em-dash placeholder with hyphen in batch preview identity column
+
+### Sprint 4 — Remaining (Planned):
 - [ ] Auto multi-batch from Transform tab (submit all chunks as one batch job)
 - [ ] Multi-job status tracker UI
 - [ ] Error handling for oversized batch requests
@@ -168,7 +174,7 @@ Batch operations menggunakan model hardcoded — belum ada model selection:
 - **API key di URL query params** — /batch/status dan /batch/download kirim api_key sebagai
   query param (bisa muncul di server logs). Long-term: pindah ke header. Low priority sekarang.
 
-## Tomorrow — Priority Order
+## Next Session — Priority Order
 1. **Test E4 fix** (most urgent — been broken since initial implementation)
    - Start backend + frontend
    - Upload a dataset with clearly categorical columns (e.g. product, region) + numeric columns (e.g. sales, quantity)
