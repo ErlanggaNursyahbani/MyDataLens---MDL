@@ -176,7 +176,7 @@ export default function MergePanel({ initialUploadResult }: MergePanelProps) {
   const canDownload = canPreview && !merging
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="space-y-6">
 
       {/* Dataset 1 summary */}
       <div>

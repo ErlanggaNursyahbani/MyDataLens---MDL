@@ -152,7 +152,7 @@ export default function TransformPanel({ initialUploadResult }: TransformPanelPr
     : 0
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="space-y-6">
 
       {/* Dataset summary */}
       <div className="rounded-lg border border-zinc-700 bg-zinc-800/60 px-4 py-3">
