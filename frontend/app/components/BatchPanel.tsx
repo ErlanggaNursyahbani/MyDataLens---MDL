@@ -973,7 +973,7 @@ export default function BatchPanel({ initialUploadResult, initialFileName }: Bat
                               >
                                 {identityColumn && (
                                   <td className="px-3 py-2.5 text-violet-300 font-mono whitespace-nowrap max-w-[140px] truncate">
-                                    {row.identity || '—'}
+                                    {row.identity || '-'}
                                   </td>
                                 )}
                                 <td className="px-3 py-2.5 text-zinc-300 max-w-[220px]">
