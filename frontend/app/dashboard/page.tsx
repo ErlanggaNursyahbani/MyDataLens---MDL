@@ -284,6 +284,9 @@ export default function DashboardPage() {
   const [chatState, setChatState] = useState<ChatState>('idle')
   const [chatError, setChatError] = useState('')
 
+  const [previewLimit, setPreviewLimit] = useState(10)
+  const [previewCustom, setPreviewCustom] = useState('')
+
   useEffect(() => {
     if (!sessionStorage.getItem('mdl_api_key')) {
       router.replace('/api-setup')
@@ -494,7 +497,7 @@ export default function DashboardPage() {
     if (inputRef.current) inputRef.current.value = ''
   }
 
-  const previewRows = result ? result.all_rows.slice(0, 50) : []
+  const previewRows = result ? result.all_rows.slice(0, previewLimit) : []
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -646,13 +649,58 @@ export default function DashboardPage() {
 
                 {/* Preview table */}
                 <div>
-                  <h3 className="text-sm font-medium text-zinc-300 mb-3">
-                    Data Preview{' '}
-                    <span className="text-zinc-500 font-normal">(first {previewRows.length} rows)</span>
-                  </h3>
-                  <div className="overflow-x-auto rounded-xl border border-zinc-800">
+                  <div className="flex items-center gap-3 mb-3 flex-wrap">
+                    <h3 className="text-sm font-medium text-zinc-300">
+                      Data Preview
+                      <span className="text-zinc-500 font-normal ml-1">
+                        ({Math.min(previewLimit, result.row_count).toLocaleString()} of {result.row_count.toLocaleString()} rows)
+                      </span>
+                    </h3>
+                    <div className="ml-auto flex items-center gap-1.5">
+                      <span className="text-xs text-zinc-500">Show:</span>
+                      {([10, 50, 100] as const).map(n => (
+                        <button
+                          key={n}
+                          onClick={() => { setPreviewLimit(n); setPreviewCustom('') }}
+                          className={[
+                            'px-2.5 py-1 rounded text-xs transition',
+                            previewLimit === n && previewCustom === ''
+                              ? 'bg-indigo-600 text-white'
+                              : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200',
+                          ].join(' ')}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => { setPreviewCustom('custom') }}
+                        className={[
+                          'px-2.5 py-1 rounded text-xs transition',
+                          previewCustom === 'custom'
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200',
+                        ].join(' ')}
+                      >
+                        Custom
+                      </button>
+                      {previewCustom === 'custom' && (
+                        <input
+                          type="number"
+                          min={1}
+                          max={result.row_count}
+                          placeholder="rows"
+                          className="w-20 rounded border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-200 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          onChange={e => {
+                            const v = parseInt(e.target.value)
+                            if (!isNaN(v) && v > 0) setPreviewLimit(v)
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto overflow-y-auto max-h-[500px] rounded-xl border border-zinc-800">
                     <table className="min-w-full text-sm">
-                      <thead>
+                      <thead className="sticky top-0 z-10">
                         <tr className="border-b border-zinc-800 bg-zinc-900">
                           {result.columns.map((col) => (
                             <th key={col.name} className="px-4 py-2.5 text-left text-xs font-medium whitespace-nowrap">
