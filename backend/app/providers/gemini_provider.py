@@ -32,7 +32,7 @@ async def chat_gemini(
     sample: list[dict[str, Any]],
     history: list[dict[str, str]],
     message: str,
-    dataset_stats: dict[str, Any] | None = None,
+    stats_text: str | None = None,
 ) -> str:
     """Chat about the dataset via Google Gemini 2.0 Flash."""
     client = genai.Client(api_key=api_key)
@@ -45,7 +45,7 @@ async def chat_gemini(
         model="gemini-2.0-flash",
         contents=contents,
         config=types.GenerateContentConfig(
-            system_instruction=build_chat_system_prompt(schema, sample, dataset_stats),
+            system_instruction=build_chat_system_prompt(schema, sample, stats_text),
             temperature=0.7,
         ),
     )

@@ -32,7 +32,7 @@ async def chat_anthropic(
     sample: list[dict[str, Any]],
     history: list[dict[str, str]],
     message: str,
-    dataset_stats: dict[str, Any] | None = None,
+    stats_text: str | None = None,
 ) -> str:
     """Chat about the dataset via Anthropic claude-haiku-4-5."""
     client = anthropic.AsyncAnthropic(api_key=api_key)
@@ -43,7 +43,7 @@ async def chat_anthropic(
     response = await client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=2048,
-        system=build_chat_system_prompt(schema, sample, dataset_stats),
+        system=build_chat_system_prompt(schema, sample, stats_text),
         messages=messages,
         temperature=0.7,
     )

@@ -32,12 +32,12 @@ async def chat_groq(
     sample: list[dict[str, Any]],
     history: list[dict[str, str]],
     message: str,
-    dataset_stats: dict[str, Any] | None = None,
+    stats_text: str | None = None,
 ) -> str:
     """Chat about the dataset via Groq llama-3.3-70b-versatile."""
     client = AsyncGroq(api_key=api_key)
     messages: list[dict[str, str]] = [
-        {"role": "system", "content": build_chat_system_prompt(schema, sample, dataset_stats)}
+        {"role": "system", "content": build_chat_system_prompt(schema, sample, stats_text)}
     ]
     for turn in history:
         messages.append({"role": turn["role"], "content": turn["content"]})

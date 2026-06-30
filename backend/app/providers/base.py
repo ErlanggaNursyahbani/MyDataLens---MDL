@@ -4,13 +4,13 @@ from typing import Any
 
 CHAT_SYSTEM_PROMPT = (
     "You are a data analyst assistant. Answer questions about the uploaded dataset. "
-    "IMPORTANT: If 'Verified dataset statistics' are provided below, you MUST use those exact "
-    "numbers for ALL aggregate queries (totals, sums, averages, counts, rankings). "
-    "Never compute aggregates from the sample rows — those are incomplete. "
-    "If the user asks anything unrelated to the data, politely explain that you can only "
-    "help with questions about their dataset. "
-    "If a question is ambiguous or unclear, ask for clarification before answering. "
-    "Be concise, specific, and reference column names when relevant. "
+    "RULE: The section labelled 'SYSTEM-COMPUTED STATISTICS' below contains exact values "
+    "calculated by the server from the complete dataset. "
+    "For any aggregate question (total, sum, count, average, min, max, ranking) you MUST "
+    "read the answer directly from that section and report it verbatim — never recompute "
+    "from the sample rows. The sample rows are incomplete; the statistics are the ground truth. "
+    "If the user asks anything unrelated to the data, politely explain you can only help "
+    "with questions about their dataset. "
     "Format numbers with thousand separators for readability (e.g. 1,234,567)."
 )
 
@@ -71,21 +71,15 @@ def build_user_prompt(schema: list[dict[str, str]], sample: list[dict[str, Any]]
 def build_chat_system_prompt(
     schema: list[dict[str, str]],
     sample: list[dict[str, Any]],
-    dataset_stats: dict[str, Any] | None = None,
+    stats_text: str | None = None,
 ) -> str:
     """Build the chat system prompt that includes dataset context."""
     rows = sample[:20]
-    stats_block = ""
-    if dataset_stats:
-        stats_block = (
-            f"\n\nVerified dataset statistics (pre-computed from ALL rows — "
-            f"use these exact numbers for totals, averages, counts, and rankings):\n"
-            f"{json.dumps(dataset_stats, ensure_ascii=False, default=str)}"
-        )
+    stats_block = f"\n\n{stats_text}" if stats_text else ""
     context = (
         f"{stats_block}\n\n"
         f"Dataset schema:\n{json.dumps(schema, ensure_ascii=False)}\n\n"
-        f"Sample rows (for structure reference only — {len(rows)} rows):\n"
+        f"Sample rows (structure reference only — do NOT use for any aggregate calculations):\n"
         f"{json.dumps(rows, ensure_ascii=False, default=str)}"
     )
     return CHAT_SYSTEM_PROMPT + context
