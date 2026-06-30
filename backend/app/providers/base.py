@@ -54,21 +54,36 @@ Rules:
 - Only use column names that exist in the provided schema"""
 
 
-def build_user_prompt(schema: list[dict[str, str]], sample: list[dict[str, Any]]) -> str:
+def build_user_prompt(schema: list[dict[str, str]], sample: list[dict[str, Any]], row_count: int = 0) -> str:
     """Build the user-turn message with schema and sample JSON."""
     rows = sample[:20]
+    total = row_count if row_count > 0 else len(rows)
     return (
         f"Dataset schema:\n{json.dumps(schema, ensure_ascii=False)}\n\n"
-        f"Sample data ({len(rows)} rows):\n{json.dumps(rows, ensure_ascii=False, default=str)}"
+        f"Total rows in dataset: {total}\n"
+        f"Sample data ({len(rows)} rows shown):\n{json.dumps(rows, ensure_ascii=False, default=str)}"
     )
 
 
-def build_chat_system_prompt(schema: list[dict[str, str]], sample: list[dict[str, Any]]) -> str:
+def build_chat_system_prompt(
+    schema: list[dict[str, str]],
+    sample: list[dict[str, Any]],
+    dataset_stats: dict[str, Any] | None = None,
+) -> str:
     """Build the chat system prompt that includes dataset context."""
     rows = sample[:20]
+    stats_block = ""
+    if dataset_stats:
+        stats_block = (
+            f"\n\nVerified dataset statistics (pre-computed from ALL rows — "
+            f"use these exact numbers for totals, averages, counts, and rankings):\n"
+            f"{json.dumps(dataset_stats, ensure_ascii=False, default=str)}"
+        )
     context = (
-        f"\n\nDataset schema:\n{json.dumps(schema, ensure_ascii=False)}\n\n"
-        f"Sample data ({len(rows)} rows):\n{json.dumps(rows, ensure_ascii=False, default=str)}"
+        f"{stats_block}\n\n"
+        f"Dataset schema:\n{json.dumps(schema, ensure_ascii=False)}\n\n"
+        f"Sample rows (for structure reference only — {len(rows)} rows):\n"
+        f"{json.dumps(rows, ensure_ascii=False, default=str)}"
     )
     return CHAT_SYSTEM_PROMPT + context
 

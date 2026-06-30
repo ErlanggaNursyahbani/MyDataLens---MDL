@@ -10,12 +10,13 @@ async def generate_dashboard_gemini(
     api_key: str,
     schema: list[dict[str, str]],
     sample: list[dict[str, Any]],
+    row_count: int = 0,
 ) -> dict[str, Any]:
     """Generate dashboard config via Google Gemini 2.0 Flash."""
     client = genai.Client(api_key=api_key)
     response = await client.aio.models.generate_content(
         model="gemini-2.0-flash",
-        contents=build_user_prompt(schema, sample),
+        contents=build_user_prompt(schema, sample, row_count),
         config=types.GenerateContentConfig(
             system_instruction=DASHBOARD_SYSTEM_PROMPT,
             response_mime_type="application/json",
@@ -31,6 +32,7 @@ async def chat_gemini(
     sample: list[dict[str, Any]],
     history: list[dict[str, str]],
     message: str,
+    dataset_stats: dict[str, Any] | None = None,
 ) -> str:
     """Chat about the dataset via Google Gemini 2.0 Flash."""
     client = genai.Client(api_key=api_key)
@@ -43,7 +45,7 @@ async def chat_gemini(
         model="gemini-2.0-flash",
         contents=contents,
         config=types.GenerateContentConfig(
-            system_instruction=build_chat_system_prompt(schema, sample),
+            system_instruction=build_chat_system_prompt(schema, sample, dataset_stats),
             temperature=0.7,
         ),
     )

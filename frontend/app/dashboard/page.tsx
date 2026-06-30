@@ -211,6 +211,45 @@ function renderChart(chart: ChartConfig) {
 
 // ── KPI Helpers ────────────────────────────────────────────────────────────────
 
+function computeDatasetStats(result: UploadResult): Record<string, unknown> {
+  const rows = result.all_rows
+  const stats: Record<string, unknown> = { row_count: result.row_count }
+
+  for (const col of result.columns) {
+    const values = rows.map(r => r[col.name])
+
+    if (col.dtype === 'integer' || col.dtype === 'float') {
+      const nums = values.map(v => Number(v)).filter(n => !isNaN(n))
+      if (nums.length > 0) {
+        const sum = nums.reduce((a, b) => a + b, 0)
+        stats[col.name] = {
+          sum,
+          mean: sum / nums.length,
+          min: Math.min(...nums),
+          max: Math.max(...nums),
+          count: nums.length,
+        }
+      }
+    } else if (col.dtype === 'string') {
+      const freq: Record<string, number> = {}
+      for (const v of values) {
+        const key = String(v ?? '')
+        freq[key] = (freq[key] ?? 0) + 1
+      }
+      const top5 = Object.entries(freq)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([value, count]) => ({ value, count }))
+      stats[col.name] = {
+        unique_count: Object.keys(freq).length,
+        top_values: top5,
+      }
+    }
+  }
+
+  return stats
+}
+
 function computeKPIs(result: UploadResult) {
   const colNames = result.columns.map(c => c.name)
   const rows = result.all_rows
@@ -378,6 +417,7 @@ export default function DashboardPage() {
           sample: result.sample,
           api_key: apiKey,
           provider,
+          row_count: result.row_count,
         }),
       })
       if (!res.ok) {
@@ -461,6 +501,7 @@ export default function DashboardPage() {
           history: chatHistory,
           provider,
           api_key: apiKey,
+          dataset_stats: computeDatasetStats(result),
         }),
       })
       if (!res.ok) {

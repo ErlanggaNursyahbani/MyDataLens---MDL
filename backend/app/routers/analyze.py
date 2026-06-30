@@ -19,6 +19,7 @@ class AnalyzeRequest(BaseModel):
     sample: list[dict[str, Any]]
     api_key: str
     provider: str
+    row_count: int = 0
 
 
 class ChartConfig(BaseModel):
@@ -132,6 +133,7 @@ async def analyze_dataset(request: AnalyzeRequest) -> AnalyzeResponse:
             api_key=request.api_key,
             schema=schema,
             sample=request.sample,
+            row_count=request.row_count,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

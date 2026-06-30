@@ -9,6 +9,7 @@ async def generate_dashboard_anthropic(
     api_key: str,
     schema: list[dict[str, str]],
     sample: list[dict[str, Any]],
+    row_count: int = 0,
 ) -> dict[str, Any]:
     """Generate dashboard config via Anthropic claude-haiku-4-5."""
     client = anthropic.AsyncAnthropic(api_key=api_key)
@@ -17,7 +18,7 @@ async def generate_dashboard_anthropic(
         max_tokens=4096,
         system=DASHBOARD_SYSTEM_PROMPT,
         messages=[
-            {"role": "user", "content": build_user_prompt(schema, sample)},
+            {"role": "user", "content": build_user_prompt(schema, sample, row_count)},
         ],
         temperature=0.3,
     )
@@ -31,6 +32,7 @@ async def chat_anthropic(
     sample: list[dict[str, Any]],
     history: list[dict[str, str]],
     message: str,
+    dataset_stats: dict[str, Any] | None = None,
 ) -> str:
     """Chat about the dataset via Anthropic claude-haiku-4-5."""
     client = anthropic.AsyncAnthropic(api_key=api_key)
@@ -41,7 +43,7 @@ async def chat_anthropic(
     response = await client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=2048,
-        system=build_chat_system_prompt(schema, sample),
+        system=build_chat_system_prompt(schema, sample, dataset_stats),
         messages=messages,
         temperature=0.7,
     )

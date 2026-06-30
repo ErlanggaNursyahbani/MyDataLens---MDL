@@ -11,17 +11,18 @@ async def generate_dashboard(
     api_key: str,
     schema: list[dict[str, str]],
     sample: list[dict[str, Any]],
+    row_count: int = 0,
 ) -> dict[str, Any]:
     """Route dashboard generation to the appropriate LLM provider."""
     match provider:
         case "openai":
-            return await generate_dashboard_openai(api_key, schema, sample)
+            return await generate_dashboard_openai(api_key, schema, sample, row_count)
         case "anthropic":
-            return await generate_dashboard_anthropic(api_key, schema, sample)
+            return await generate_dashboard_anthropic(api_key, schema, sample, row_count)
         case "gemini":
-            return await generate_dashboard_gemini(api_key, schema, sample)
+            return await generate_dashboard_gemini(api_key, schema, sample, row_count)
         case "groq":
-            return await generate_dashboard_groq(api_key, schema, sample)
+            return await generate_dashboard_groq(api_key, schema, sample, row_count)
         case _:
             raise ValueError(f"Unknown provider: {provider!r}")
 
@@ -33,16 +34,17 @@ async def chat_with_data(
     sample: list[dict[str, Any]],
     history: list[dict[str, str]],
     message: str,
+    dataset_stats: dict[str, Any] | None = None,
 ) -> str:
     """Route chat to the appropriate LLM provider."""
     match provider:
         case "openai":
-            return await chat_openai(api_key, schema, sample, history, message)
+            return await chat_openai(api_key, schema, sample, history, message, dataset_stats)
         case "anthropic":
-            return await chat_anthropic(api_key, schema, sample, history, message)
+            return await chat_anthropic(api_key, schema, sample, history, message, dataset_stats)
         case "gemini":
-            return await chat_gemini(api_key, schema, sample, history, message)
+            return await chat_gemini(api_key, schema, sample, history, message, dataset_stats)
         case "groq":
-            return await chat_groq(api_key, schema, sample, history, message)
+            return await chat_groq(api_key, schema, sample, history, message, dataset_stats)
         case _:
             raise ValueError(f"Unknown provider: {provider!r}")

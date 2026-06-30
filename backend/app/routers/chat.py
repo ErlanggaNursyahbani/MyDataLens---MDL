@@ -25,6 +25,7 @@ class ChatRequest(BaseModel):
     history: list[ChatMessage]
     provider: str
     api_key: str
+    dataset_stats: dict[str, Any] | None = None
 
 
 class ChatResponse(BaseModel):
@@ -45,6 +46,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
             sample=request.sample,
             history=history,
             message=request.message,
+            dataset_stats=request.dataset_stats,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
