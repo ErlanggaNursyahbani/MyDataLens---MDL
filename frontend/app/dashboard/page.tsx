@@ -491,6 +491,8 @@ export default function DashboardPage() {
     setChatHistory(newHistory)
 
     try {
+      const stats = computeDatasetStats(result)
+      console.log('[chat] dataset_stats keys:', Object.keys(stats), '| all_rows count:', result.all_rows.length)
       const res = await fetch('http://localhost:8000/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -501,7 +503,7 @@ export default function DashboardPage() {
           history: chatHistory,
           provider,
           api_key: apiKey,
-          dataset_stats: computeDatasetStats(result),
+          dataset_stats: stats,
         }),
       })
       if (!res.ok) {
